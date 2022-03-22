@@ -185,59 +185,10 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
   }
   
   if(NCOL(ff) > 1){
-    result_amra = list()
-    ff_res = ff
-    mu_ff = vector()
-    # fit arma first
-    for (bbb in 1:NCOL(ff)) {
-      ff_i_arma = arima(ff[,bbb],order = c(1,0,1))
-      result_amra[[bbb]] = ff_i_arma
-      ff_res[,bbb] = ff_i_arma$residuals
-      mu_ff[bbb] <- predict(ff_i_arma)$pred
-    }
     
-    #ica for factors
-    ica = ica::icafast(ff_res,nc = NCOL(ff_res),alg = "def",fun = "kur")
-    lf = ica$S
-    ica_B = solve(t(ica$W))
+    result_factors = MFTGC_est(ff, Corr.Struture = c("ica","dcc","copula"), tgc.type  = tgc.type, rep_sim = rep_sim)
     
-    #factor moment estimation
-    type  = tgc.type
-    
-    q = NCOL(lf)
-    var_mf_fore = matrix(0,q,q)
-    skew_mf_fore = matrix(0,q,q^2)
-    kurt_mf_fore = matrix(0,q,q^3)
-    
-    lnf_lf = vector()
-    lnf_lf_con = vector()
-    
-    con_factor <- list()
-    
-    for (gg in 1:NCOL(ff)) {
-      lf_snp = TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = type,CTGC = F,rep_sim = rep_sim)
-      
-      con_factor[[gg]] <- lf_snp
-      
-      mu_factor_fore = lf_snp$result_moment$mm.fore[1]
-      var_factor_fore = lf_snp$result_moment$mm.fore[2]
-      skew_factor_fore = lf_snp$result_moment$mm.fore[3]
-      kurt_factor_fore = lf_snp$result_moment$mm.fore[4]
-      
-      lnf_lf[gg] = lf_snp$Lnf_tv
-      lnf_lf_con[gg] = lf_snp$result_con$Lnf_con
-      
-      var_mf_fore[gg,gg] = var_factor_fore
-      skew_mf_fore[gg,gg+(gg-1)*q] = skew_factor_fore
-      kurt_mf_fore[gg,gg+(gg-1)*q+(gg-1)*q^2] = kurt_factor_fore
-    }
-    
-    var_f_fore = t(ica_B)%*%var_mf_fore%*%ica_B
-    skew_f_fore = t(ica_B)%*%skew_mf_fore%*%(ica_B%x%ica_B)
-    kurt_f_fore = t(ica_B)%*%kurt_mf_fore%*%(ica_B%x%ica_B%x%ica_B)
-    
-    factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore)
-    result_factors = list(mu_ff = mu_ff,result_amra = result_amra,snp = con_factor,factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore))
+    factor_moments = result_factors[[4]]
     
   }
   
@@ -251,7 +202,7 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
     kurt_f_fore = est_tgc$result_moment$mm.fore[4]
     
     factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore)
-    result_factors = list(snp = est_tgc,factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore))
+    result_factors = list(result_snp = est_tgc,factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore))
   }
   
   #residual moment estimation

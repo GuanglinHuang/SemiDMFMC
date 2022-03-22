@@ -714,3 +714,204 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
   }
   
 }
+
+MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 'sstd', Corr.Struture = c("ica","dcc","copula"), dcc.model = "DCC", 
+                     copula.model = list(copula = "mvt", method = "ML", time.varying = FALSE, transformation = "spd"),
+                     tgc.type  = "leverage",tgc.targeting = F,mean.model = list(armaOrder = c(0, 0)),CTGC = FALSE,rep_sim = 10){
+  
+  result_factors_ica = NULL
+  result_factors_dcc = NULL
+  result_factors_copula = NULL
+  
+  ica_moments = NULL
+  dcc_moments = NULL
+  copula_moments = NULL
+  
+  q = NCOL(ff)
+  ff = as.matrix(ff)
+  
+  if("ica" %in% Corr.Struture){
+    
+    gogarch = rmgarch::gogarchspec(mean.model = list(model = "VAR", robust = FALSE, 
+                                                     lag = 1, lag.max = NULL, lag.criterion = "FPE", 
+                                                     external.regressors = NULL, 
+                                                     robust.control = list("gamma" = 0.25, "delta" = 0.01, "nc" = 10, "ns" = 500)), 
+                                   variance.model = list(model = var.model, garchOrder = c(1,1), submodel = NULL, 
+                                                         variance.targeting = var.targeting), distribution.model = "manig", 
+                                   ica = "fastica", ica.fix = list(A = NULL, K = NULL))
+    
+    fit_gogarch = rmgarch::gogarchfit(gogarch,ff,out.sample = 0, gfun = "tanh")
+    
+    fore_gogarch = rmgarch::gogarchforecast(fit_gogarch,n.ahead = 1)
+  
+    ica_B = fit_gogarch@mfit$A
+
+    lf = fit_gogarch@mfit$residuals%*%t(solve(ica_B))
+    
+    #independent component moment estimation
+    var_mf_fore = matrix(0,q,q)
+    skew_mf_fore = matrix(0,q,q^2)
+    kurt_mf_fore = matrix(0,q,q^3)
+    
+    lnf_lf = vector()
+    lnf_lf_con = vector()
+    
+    con_factor <- list()
+    
+    for (gg in 1:q) {
+      lf_snp = TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,CTGC = F,rep_sim = 10)
+      
+      con_factor[[gg]] <- lf_snp
+      
+      mu_factor_fore = lf_snp$result_moment$mm.fore[1]
+      var_factor_fore = lf_snp$result_moment$mm.fore[2]
+      skew_factor_fore = lf_snp$result_moment$mm.fore[3]
+      kurt_factor_fore = lf_snp$result_moment$mm.fore[4]
+      
+      lnf_lf[gg] = lf_snp$Lnf_tv
+      lnf_lf_con[gg] = lf_snp$result_con$Lnf_con
+      
+      var_mf_fore[gg,gg] = var_factor_fore
+      skew_mf_fore[gg,gg+(gg-1)*q] = skew_factor_fore
+      kurt_mf_fore[gg,gg+(gg-1)*q+(gg-1)*q^2] = kurt_factor_fore
+    }
+    
+    var_f_fore = ica_B%*%var_mf_fore%*%t(ica_B)
+    skew_f_fore = ica_B%*%skew_mf_fore%*%(t(ica_B)%x%t(ica_B))
+    kurt_f_fore = ica_B%*%kurt_mf_fore%*%(t(ica_B)%x%t(ica_B)%x%t(ica_B))
+    
+    result_factors_ica = list(result_mgarch = fit_gogarch,result_snp = con_factor,factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore))
+    
+    ica_moments = list(var_f_fore,skew_f_fore,kurt_f_fore)
+  }
+  
+  if("dcc" %in% Corr.Struture){
+  
+    uspec = rugarch::ugarchspec(mean.model = mean.model,
+                                variance.model = list(model = var.model, garchOrder = c(1, 1),
+                                                      variance.targeting = var.targeting), distribution = var.distribution) #univariate spec
+    
+    mspec = rugarch::multispec( replicate(q, uspec) )
+    
+    dccgarch = rmgarch::dccspec(uspec = mspec, VAR = T, model = dcc.model,distribution = "mvt")
+    
+    fit_dccgarch = rmgarch::dccfit(dccgarch,ff)
+    
+    fore_dccgarch = rmgarch::dccforecast(fit_dccgarch,n.ahead = 1)
+    
+    var_f_fore = as.matrix(fore_dccgarch@mforecast$H[[1]][,,1])
+    
+    lf = fit_dccgarch@mfit$stdresid
+    
+    #independent component moment estimation
+    q = NCOL(lf)
+    var_mf_fore = matrix(0,q,q)
+    skew_mf_fore = matrix(0,q,q^2)
+    kurt_mf_fore = matrix(0,q,q^3)
+    
+    lnf_lf = vector()
+    lnf_lf_con = vector()
+    
+    con_factor <- list()
+    
+    for (gg in 1:NCOL(ff)) {
+      lf_snp = SemiDMFMC::TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,CTGC = F,rep_sim = 10)
+      
+      con_factor[[gg]] <- lf_snp
+      
+      mu_factor_fore = lf_snp$result_moment$mm.fore[1]
+      var_factor_fore = lf_snp$result_moment$mm.fore[2]
+      skew_factor_fore = lf_snp$result_moment$mm.fore[3]
+      kurt_factor_fore = lf_snp$result_moment$mm.fore[4]
+      
+      lnf_lf[gg] = lf_snp$Lnf_tv
+      lnf_lf_con[gg] = lf_snp$result_con$Lnf_con
+      
+      var_mf_fore[gg,gg] = var_factor_fore/var_factor_fore
+      skew_mf_fore[gg,gg+(gg-1)*q] = skew_factor_fore/(var_factor_fore)^1.5
+      kurt_mf_fore[gg,gg+(gg-1)*q+(gg-1)*q^2] = kurt_factor_fore/(var_factor_fore)^2
+    }
+
+    sig_f_fore = Mat.k(var_f_fore,1/2)
+    
+    var_f_fore = sig_f_fore%*%var_mf_fore%*%sig_f_fore
+    skew_f_fore = sig_f_fore%*%skew_mf_fore%*%(sig_f_fore%x%sig_f_fore)
+    kurt_f_fore = sig_f_fore%*%kurt_mf_fore%*%(sig_f_fore%x%sig_f_fore%x%sig_f_fore)
+    
+    result_factors_dcc = list(result_mgarch = fit_dccgarch,result_snp = con_factor,factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore))
+    dcc_moments = list(var_f_fore,skew_f_fore,kurt_f_fore)
+  }
+  
+  if("copula" %in% Corr.Struture){
+    
+    uspec = rugarch::ugarchspec(mean.model = mean.model,
+                                variance.model = list(model = var.model, garchOrder = c(1, 1),
+                                                      variance.targeting = var.targeting), distribution = var.distribution) #univariate spec
+    
+    mspec = rugarch::multispec( replicate(q, uspec) )
+    
+    copulagarch = rmgarch::cgarchspec(uspec = mspec, VAR = T, distribution.model = copula.model)
+    
+    fit_copulagarch = rmgarch::cgarchfit(copulagarch,ff)
+    
+    # use simulation to forecast the Ht
+    sim2 = rmgarch::cgarchsim(fit_copulagarch, n.sim = 1, m.sim = 1, startMethod = "sample")
+    
+    var_f_fore = sim2@msim$simH[[1]][,,1]
+    
+    lf = fit_copulagarch@mfit$stdresid
+    
+    #independent component moment estimation
+  
+    var_mf_fore = matrix(0,q,q)
+    skew_mf_fore = matrix(0,q,q^2)
+    kurt_mf_fore = matrix(0,q,q^3)
+    
+    lnf_lf = vector()
+    lnf_lf_con = vector()
+    
+    con_factor <- list()
+    
+    for (gg in 1:NCOL(ff)) {
+      lf_snp = SemiDMFMC::TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,CTGC = F,rep_sim = 10)
+      
+      con_factor[[gg]] <- lf_snp
+      
+      mu_factor_fore = lf_snp$result_moment$mm.fore[1]
+      var_factor_fore = lf_snp$result_moment$mm.fore[2]
+      skew_factor_fore = lf_snp$result_moment$mm.fore[3]
+      kurt_factor_fore = lf_snp$result_moment$mm.fore[4]
+      
+      lnf_lf[gg] = lf_snp$Lnf_tv
+      lnf_lf_con[gg] = lf_snp$result_con$Lnf_con
+      
+      var_mf_fore[gg,gg] = var_factor_fore/var_factor_fore
+      skew_mf_fore[gg,gg+(gg-1)*q] = skew_factor_fore/(var_factor_fore)^1.5
+      kurt_mf_fore[gg,gg+(gg-1)*q+(gg-1)*q^2] = kurt_factor_fore/(var_factor_fore)^2
+    }
+    
+    
+    sig_f_fore = Mat.k(var_f_fore,1/2)
+    
+    var_f_fore = sig_f_fore%*%var_mf_fore%*%sig_f_fore
+    skew_f_fore = sig_f_fore%*%skew_mf_fore%*%(sig_f_fore%x%sig_f_fore)
+    kurt_f_fore = sig_f_fore%*%kurt_mf_fore%*%(sig_f_fore%x%sig_f_fore%x%sig_f_fore)
+  
+    result_factors_copula = list(result_mgarch = fit_dccgarch,snp = con_factor,factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore))
+    
+    copula_moments = list(var_f_fore,skew_f_fore,kurt_f_fore)
+  }
+  
+  
+  return(list(result_factors_ica = result_factors_ica,
+              result_factors_dcc = result_factors_dcc,
+              result_factors_copula = result_factors_copula,
+              factor_moments = list(ica_moments = ica_moments,
+                                    dcc_moments = dcc_moments,
+                                    copula_moments = copula_moments)))
+  
+}
+  
+  
+
+
