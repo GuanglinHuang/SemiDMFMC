@@ -262,3 +262,15 @@ Portfolio_Weight = function(MM,opt.type = c("VAR","Uc","MV"),gamma = 10,
   return(ww)
 }
 
+Mat.k = function(A,k,eps = 10^-6){
+  ev = eigen(A)$values
+  mark = which(ev > eps)
+  ev = ev[mark]
+  evc = as.matrix(eigen(A)$vectors)[,mark]
+  
+  Matk = evc%*%diag(ev^k)%*%t(evc)
+  
+  return(Matk)
+}
+
+
