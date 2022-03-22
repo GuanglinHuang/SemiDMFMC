@@ -1,0 +1,6 @@
+useDynLib(SemiDMFMC, .registration=TRUE)
+importFrom(Rcpp, evalCpp)
+importFrom("stats", "cov", "dnorm", "lm", "optim", "pnorm", "predict",
+               "qnorm", "quantile", "runif")
+importFrom("utils", "tail")
+exportPattern("^[[:alpha:]]+")

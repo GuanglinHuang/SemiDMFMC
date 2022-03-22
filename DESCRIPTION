@@ -1,0 +1,21 @@
+Package: SemiDMFMC
+Type: Package
+Title: What the package does (short line)
+Version: 0.2
+Date: 2022-03-19
+Author: Guanglin Huang
+Maintainer: Who to complain to <yourfault@somewhere.net>
+Description: More about what it does (maybe more than one line)
+License: What license is it under?
+Imports: 
+    Rcpp (>= 1.0.5),
+    rugarch,
+    MASS,
+    PerformanceAnalytics,
+    np,
+    ica,
+    Rsolnp,
+    ncvreg,
+    gtools
+LinkingTo: Rcpp, RcppArmadillo
+RoxygenNote: 7.1.1
