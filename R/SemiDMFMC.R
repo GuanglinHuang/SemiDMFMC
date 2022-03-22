@@ -14,12 +14,12 @@
 #' @return Estimated covariance, co-skewness, co-exkurtosis, co-kurtosis and the results of regression.
 #' 
 #' @examples
-# n = 2;t = 500;k = 2;ff_lt = as.matrix(rnorm(t+2));ff_nlt = as.matrix(rnorm(t+2));
-# Zt = ff_nlt;et = matrix(rnorm(n*(t+2)),t+2,n);
+# n = 5;t = 500;k = 2;ff_lt = as.matrix(rnorm(t+2));ff_nlt = as.matrix(rnorm(t+2));
+# et = matrix(rnorm(n*(t+2)),t+2,n);
 # mu =   exp(-1/(1+Zt[1:(t+1)]^2));
 # beta = exp((Zt[1:(t+1)]^2)/(1+Zt[1:(t+1)]^2));
-# X1t = mu + beta*ff_nlt[2:(t+2),] + 0.5*ff_lt[2:(t+2),] + et[2:(t+2),1];
-# X2t = mu + beta*ff_nlt[2:(t+2),] + 1*ff_lt[2:(t+2),] + et[2:(t+2),2];
+# X1t = mu +  beta*(ff_nlt[2:(t+2),]) + 0.5*(ff_lt[2:(t+2),]) + (et[2:(t+2),1]);
+# X2t = mu + beta*(ff_nlt[2:(t+2),]) + 1*(ff_lt[2:(t+2),]) + (et[2:(t+2),2]);
 # Xt = cbind(X1t,X2t)
 # X = Xt[1:t,];ff_nl = ff_nlt[2:(t+1)];ff_l = ff_lt[2:(t+1)];Z = Zt[2:(t+1)];
 # con = SemiDMFMC(X,ff_l,ff_nl,Z)

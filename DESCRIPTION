@@ -16,6 +16,7 @@ Imports:
     ica,
     Rsolnp,
     ncvreg,
-    gtools
+    gtools,
+    knitr
 LinkingTo: Rcpp, RcppArmadillo
 RoxygenNote: 7.1.1

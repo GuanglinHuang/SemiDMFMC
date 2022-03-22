@@ -7,7 +7,7 @@
 SemiDMFMC(
   X,
   ff,
-  Z,
+  Z = NULL,
   SemiFL = F,
   sel.bw = "uni",
   con_residual = T,
