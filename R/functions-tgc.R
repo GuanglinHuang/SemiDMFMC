@@ -515,14 +515,14 @@ solve_hess = function(hess){
 
   if(length(id) > 0){
     hess_omit = hess[-id,-id]
-    std_omit = sqrt(abs(diag(solve(hess_omit))))
+    std_omit = sqrt(abs(diag(MASS:ginv(hess_omit))))
     std = vector()
     std[id_1] <- std_omit
     std[id] <- NA
   }
 
   if(length(id) == 0){
-    std = sqrt(abs(diag(solve(hess))))
+    std = sqrt(abs(diag(MASS:ginv(hess))))
   }
 
   return(std)
@@ -574,7 +574,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
     constant_est = conc_tol[[pl]]
     theta_est = theta_est_tol[[pl]]
     
-    std = sqrt(diag(solve(constant_est$hessian)))
+    std = sqrt(diag(MASS:ginv(constant_est$hessian)))
     t_stat = constant_est$par/std
     p_value = 2*(1 - pnorm(abs(t_stat)))
     
@@ -602,7 +602,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
     },hessian = T)
     
     theta_est = constant_est$par
-    std = sqrt(diag(solve(constant_est$hessian)))
+    std = sqrt(diag(MASS:ginv(constant_est$hessian)))
     t_stat = constant_est$par/std
     p_value = 2*(1 - pnorm(abs(t_stat)))
     
