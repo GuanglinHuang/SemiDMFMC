@@ -6,6 +6,11 @@
 
 using namespace Rcpp;
 
+#ifdef RCPP_USE_GLOBAL_ROSTREAM
+Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
+Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
+#endif
+
 // cv_h1_tv_rcpp
 arma::mat cv_h1_tv_rcpp(SEXP YY, SEXP FF, SEXP KMAX, SEXP MM, SEXP BD);
 RcppExport SEXP _SemiDMFMC_cv_h1_tv_rcpp(SEXP YYSEXP, SEXP FFSEXP, SEXP KMAXSEXP, SEXP MMSEXP, SEXP BDSEXP) {
