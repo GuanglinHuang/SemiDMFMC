@@ -61,6 +61,7 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
       e_i_lm = reg$residuals
       mu_i_lm = reg$coefficients[1,]
       beta_i_lm = as.matrix(reg$coefficients[-1,])
+      
       if((qq) > 1){
         beta_i_lm = t(reg$coefficients[-1,])
       }
