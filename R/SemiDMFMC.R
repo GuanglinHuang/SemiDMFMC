@@ -8,9 +8,9 @@
 #' @param con_residual Logical, whether the moments of the residuals are time-varying or not.
 #' @param best_model A vector. It gives which factor loadings are semi-parametric.
 #' @param Penalty Only used for multi-factor model. Penalty regression to estimate factor loadings.
-#' @param tgc.type the time varying type of TGC distribution.
-#' @param rep_sim Repeat times for estimating time-varying parameters.
-#' @param ... Any other passthru parameters
+#' @param factor.control The parameters of factors' moments estimation.
+#' @param eps.control The parameters of errors' moments estimation.
+#' @param ... Any other passthru parameters.
 #' @return Estimated covariance, co-skewness, co-exkurtosis, co-kurtosis and the results of regression.
 #' 
 #' @examples
@@ -248,7 +248,7 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
     est_tgc = TGC_est(ff,var.model = var.model,var.targeting = var.targeting, 
                       var.distribution = var.distribution, tgc.type = tgc.type, 
                       tgc.targeting = tgc.targeting, mean.model = mean.model,
-                      CTGC = CTGC,rep_sim_f = rep_sim_f)
+                      CTGC = CTGC,rep_sim = rep_sim_f)
     
     mu_f_fore = est_tgc$result_moment$mm.fore[1]
     var_f_fore = est_tgc$result_moment$mm.fore[2]

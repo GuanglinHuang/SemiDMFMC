@@ -13,8 +13,14 @@ SemiDMFMC(
   con_residual = T,
   best_model = NULL,
   Penalty = c("NONE", "LASSO", "MCP", "SCAD"),
-  tgc.type = c("linear", "leverage", "n-leverage"),
-  rep_sim = 10,
+  factor.control = list(var.model = "sGARCH", var.targeting = F, var.distribution =
+    "sged", Corr.Struture = c("ica", "dcc", "copula"), dcc.model = "DCC", copula.model =
+    list(copula = "mvt", method = "ML", time.varying = FALSE, transformation = "spd"),
+    tgc.type = "leverage", tgc.targeting = F, mean.model = list(armaOrder = c(1, 1)),
+    CTGC = FALSE, rep_sim_f = 10),
+  eps.control = list(var.model = "sGARCH", var.targeting = F, var.distribution =
+    "sged", tgc.type = "leverage", tgc.targeting = F, mean.model = list(armaOrder = c(0,
+    0)), rep_sim_e = 10),
   ...
 )
 }
@@ -35,11 +41,11 @@ SemiDMFMC(
 
 \item{Penalty}{Only used for multi-factor model. Penalty regression to estimate factor loadings.}
 
-\item{tgc.type}{the time varying type of TGC distribution.}
+\item{factor.control}{The parameters of factors' moments estimation.}
 
-\item{rep_sim}{Repeat times for estimating time-varying parameters.}
+\item{eps.control}{The parameters of errors' moments estimation.}
 
-\item{...}{Any other passthru parameters}
+\item{...}{Any other passthru parameters.}
 }
 \value{
 Estimated covariance, co-skewness, co-exkurtosis, co-kurtosis and the results of regression.
