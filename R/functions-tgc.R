@@ -588,7 +588,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
     result_moment = tgc_predict(fit_variance,ff,theta_tv_inl,type = type)
     
     result_con = list(
-      snp.cof = theta_est, constant_con = constant_con,moment_fore = result_moment
+      snp.cof = theta_est, constant_con = constant_con, result_moment = list(mm.fore = result_moment)
     )
     
     return(result_con)
