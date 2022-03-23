@@ -1,6 +1,9 @@
 #' @useDynLib SmeiDMFMC
 #' @importFrom Rcpp sourceCpp
 
+
+npscoefbw <- np::npscoefbw
+
 npest_tv = function(u,h,y,x,z){
   XX = vector()
   W = vector()
