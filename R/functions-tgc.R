@@ -780,7 +780,7 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     skew_f_fore = ica_B%*%skew_mf_fore%*%(t(ica_B)%x%t(ica_B))
     kurt_f_fore = ica_B%*%kurt_mf_fore%*%(t(ica_B)%x%t(ica_B)%x%t(ica_B))
     
-    result_factors_ica = list(result_mgarch = fit_gogarch,result_snp = con_factor,factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore))
+    result_factors_ica = list(result_mgarch = fit_gogarch,fore_mgarch = fore_gogarch,result_snp = con_factor,factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore))
     
     ica_moments = list(var_f_fore,skew_f_fore,kurt_f_fore)
   }
@@ -838,7 +838,7 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     skew_f_fore = sig_f_fore%*%skew_mf_fore%*%(sig_f_fore%x%sig_f_fore)
     kurt_f_fore = sig_f_fore%*%kurt_mf_fore%*%(sig_f_fore%x%sig_f_fore%x%sig_f_fore)
     
-    result_factors_dcc = list(result_mgarch = fit_dccgarch,result_snp = con_factor,factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore))
+    result_factors_dcc = list(result_mgarch = fit_dccgarch,fore_mgarch = fore_dccgarch,result_snp = con_factor,factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore))
     dcc_moments = list(var_f_fore,skew_f_fore,kurt_f_fore)
   }
   
@@ -855,7 +855,13 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     fit_copulagarch = rmgarch::cgarchfit(copulagarch,ff)
     
     # use simulation to forecast the Ht
-    sim2 = rmgarch::cgarchsim(fit_copulagarch, n.sim = 1, m.sim = 1, startMethod = "sample")
+    sim2 = rmgarch::cgarchsim(fit_copulagarch, n.sim = 1, m.sim = 1000, startMethod = "sample")
+    
+    mu_f_fore = 0
+    for (ij in 1:1000) {
+      mu_f_fore = mu_f_fore + sim2@msim$simX[[ij]]
+    }
+    mu_f_fore = mu_f_fore/1000
     
     var_f_fore = sim2@msim$simH[[1]][,,1]
     
@@ -897,7 +903,7 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     skew_f_fore = sig_f_fore%*%skew_mf_fore%*%(sig_f_fore%x%sig_f_fore)
     kurt_f_fore = sig_f_fore%*%kurt_mf_fore%*%(sig_f_fore%x%sig_f_fore%x%sig_f_fore)
   
-    result_factors_copula = list(result_mgarch = fit_dccgarch,snp = con_factor,factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore))
+    result_factors_copula = list(result_mgarch = fit_dccgarch,fore_mgarch = list(mu = mu_f_fore), snp = con_factor,factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore))
     
     copula_moments = list(var_f_fore,skew_f_fore,kurt_f_fore)
   }
