@@ -211,21 +211,30 @@ PLSVM = function(y,xl,xnl,z){
     np =  try(np::npscoef(txdat = qxnl[2:t,],tydat = qy[2:t,],tzdat = z[1:(t-1),],
                           betas = TRUE,residuals = T,leave.one.out = T),silent = T)
     
-    npbw = np$bw
+    if(class(np) == "try-error"){
+      beta_i = beta_i_lm
+      mu_i = mu_i_lm 
+      e_i = e_i_lm
+
+      result_np = list(bw = NULL,mse = NULL,beta_fit = NULL,bws = NULL)  
+    }else{
+      npbw = np$bw
+      
+      mu_np <- predict(np, exdat = t(rep(0,q)),ezdat = z[t,])
+      beta_np <- predict(np, exdat = diag(1,q,q),ezdat = rep(z[t,],q)) - mu_np
+      np_bw = np$bw
+      np_mse = np$MSE
+      np_beta = np$beta
+      e_i = vector()
+      e_i[2:t] <- y[2:t,] - rowSums(cbind(1,xnl[2:t,])*np$beta)
+      e_i[1] = e_i_lm[1]
+      
+      beta_i = beta_np
+      mu_i = mu_np
+      
+      result_np = list(bw = np_bw,mse = np_mse,beta_fit = np_beta,bws = np$bws)  
+    }
     
-    mu_np <- predict(np, exdat = t(rep(0,q)),ezdat = z[t,])
-    beta_np <- predict(np, exdat = diag(1,q,q),ezdat = rep(z[t,],q)) - mu_np
-    np_bw = np$bw
-    np_mse = np$MSE
-    np_beta = np$beta
-    e_i = vector()
-    e_i[2:t] <- y[2:t,] - rowSums(cbind(1,xnl[2:t,])*np$beta)
-    e_i[1] = e_i_lm[1]
-    
-    beta_i = beta_np
-    mu_i = mu_np
-    
-    result_np = list(bw = np_bw,mse = np_mse,beta_fit = np_beta,bws = np$bws)
   }
   
   if(ql > 0 & q > 0){
@@ -242,21 +251,32 @@ PLSVM = function(y,xl,xnl,z){
     np =  try(np::npscoef(txdat = xnl[2:t,],tydat = y_star[2:t,],tzdat = z[1:(t-1),],
                           betas = TRUE,residuals = T,leave.one.out = T),silent = T)
     
-    npbw = np$bw
     
-    mu_np <- predict(np, exdat = t(rep(0,q)),ezdat = z[t,])
-    beta_np <- predict(np, exdat = diag(1,q,q),ezdat = rep(z[t,],q))- mu_np
-    np_bw = np$bw
-    np_mse = np$MSE
-    np_beta = np$beta
-    e_i = vector()
-    e_i[2:t] <- y[2:t,] - rowSums(cbind(1,xnl[2:t,])*np$beta) - xl[2:t,]%*%beta_pl 
-    e_i[1] <- e_i_lm[1]
+    if(class(np) == "try-error"){
+      beta_i = beta_i_lm
+      mu_i = mu_i_lm 
+      e_i = e_i_lm
+      
+      result_np = list(bw = NULL,mse = NULL,beta_fit = NULL,bws = NULL)  
+    }else{
+      npbw = np$bw
+      
+      mu_np <- predict(np, exdat = t(rep(0,q)),ezdat = z[t,])
+      beta_np <- predict(np, exdat = diag(1,q,q),ezdat = rep(z[t,],q))- mu_np
+      np_bw = np$bw
+      np_mse = np$MSE
+      np_beta = np$beta
+      e_i = vector()
+      e_i[2:t] <- y[2:t,] - rowSums(cbind(1,xnl[2:t,])*np$beta) - xl[2:t,]%*%beta_pl 
+      e_i[1] <- e_i_lm[1]
+      
+      beta_i = c(beta_pl,beta_np)
+      mu_i = mu_np
+      
+      result_np = list(bw = np_bw,mse = np_mse,beta_fit = np_beta,bws = np$bws)
+    }
     
-    beta_i = c(beta_pl,beta_np)
-    mu_i = mu_np
     
-    result_np = list(bw = np_bw,mse = np_mse,beta_fit = np_beta,bws = np$bws)
   }
   
   if(q == 0){
