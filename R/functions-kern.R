@@ -216,7 +216,7 @@ PLSVM = function(y,xl,xnl,z){
       mu_i = mu_i_lm 
       e_i = e_i_lm
 
-      result_np = list(bw = NULL,mse = NULL,beta_fit = NULL,bws = NULL)  
+      result_np = list(bw = NA,mse = NA,beta_fit = NA,bws = NA)  
     }else{
       npbw = np$bw
       
@@ -257,7 +257,7 @@ PLSVM = function(y,xl,xnl,z){
       mu_i = mu_i_lm 
       e_i = e_i_lm
       
-      result_np = list(bw = NULL,mse = NULL,beta_fit = NULL,bws = NULL)  
+      result_np = list(bw = NA,mse = NA,beta_fit = NA,bws = NA)  
     }else{
       npbw = np$bw
       

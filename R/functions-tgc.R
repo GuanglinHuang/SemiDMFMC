@@ -528,6 +528,25 @@ solve_hess = function(hess){
   return(std)
 }
 
+TVSNP.test = function(z,result_tv,result_con,type = "leverage"){
+  
+  theta_est = result_con$snp.cof
+  lt_csnp =  likelihood_tgc_con(z,theta_est)[[3]][-1]
+  
+  theta_tv_est = result_tv$tgc.cof
+  type = type
+  lt_tvsnp = c(likelihood_tgc_tv_lt_rcpp(z,theta_tv_est[c(2:5,7:10)],theta0 = theta_tv_est[c(1,6)],type = type))
+  
+  LLC = sum(lt_csnp) 
+  LLTV = sum(lt_tvsnp)
+  
+  wt = sqrt(mean((lt_tvsnp-lt_csnp)^2)-(mean(lt_tvsnp-lt_csnp))^2)
+  LR_f = (LLTV-LLC)/(sqrt(length(lt_csnp))*wt)
+  
+  
+  return(list(LR_f = LR_f,LLTV = LLTV,LLC = LLC))
+}
+
 TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 'sstd',
                    tgc.type  = "leverage",tgc.targeting = F,mean.model = list(armaOrder = c(1, 1)),CTGC = FALSE,rep_sim = 10){
   
@@ -715,7 +734,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
   
 }
 
-MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 'sstd', Corr.Struture = c("ica","dcc","copula"), dcc.model = "DCC", 
+MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 'sged', Corr.Struture = c("ica","dcc","copula"), dcc.model = "DCC", 
                      copula.model = list(copula = "mvt", method = "ML", time.varying = FALSE, transformation = "spd"),
                      tgc.type  = "leverage",tgc.targeting = F,mean.model = list(armaOrder = c(0, 0)),CTGC = FALSE,rep_sim = 10){
   
@@ -759,7 +778,7 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     con_factor <- list()
     
     for (gg in 1:q) {
-      lf_snp = TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,CTGC = F,rep_sim = 10)
+      lf_snp = TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,CTGC = F,rep_sim = rep_sim)
       
       con_factor[[gg]] <- lf_snp
       
@@ -815,7 +834,7 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     con_factor <- list()
     
     for (gg in 1:NCOL(ff)) {
-      lf_snp = SemiDMFMC::TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,CTGC = F,rep_sim = 10)
+      lf_snp = SemiDMFMC::TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,CTGC = F,rep_sim = rep_sim)
       
       con_factor[[gg]] <- lf_snp
       
@@ -879,7 +898,7 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     con_factor <- list()
     
     for (gg in 1:NCOL(ff)) {
-      lf_snp = SemiDMFMC::TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,CTGC = F,rep_sim = 10)
+      lf_snp = SemiDMFMC::TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,CTGC = F,rep_sim = rep_sim)
       
       con_factor[[gg]] <- lf_snp
       
@@ -903,18 +922,18 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     skew_f_fore = sig_f_fore%*%skew_mf_fore%*%(sig_f_fore%x%sig_f_fore)
     kurt_f_fore = sig_f_fore%*%kurt_mf_fore%*%(sig_f_fore%x%sig_f_fore%x%sig_f_fore)
   
-    result_factors_copula = list(result_mgarch = fit_dccgarch,fore_mgarch = list(mu = mu_f_fore), snp = con_factor,factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore))
+    result_factors_copula = list(result_mgarch = fit_copulagarch,fore_mgarch = list(mu = mu_f_fore), result_snp = con_factor,factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore))
     
     copula_moments = list(var_f_fore,skew_f_fore,kurt_f_fore)
   }
   
   
-  return(list(result_factors_ica = result_factors_ica,
-              result_factors_dcc = result_factors_dcc,
-              result_factors_copula = result_factors_copula,
-              factor_moments = list(ica_moments = ica_moments,
-                                    dcc_moments = dcc_moments,
-                                    copula_moments = copula_moments)))
+  return(list(result_factors_ica      =   result_factors_ica,
+              result_factors_dcc      =   result_factors_dcc,
+              result_factors_copula   =   result_factors_copula,
+              factor_moments          =   list(ica_moments    = ica_moments,
+                                               dcc_moments    = dcc_moments,
+                                               copula_moments = copula_moments)))
   
 }
   
