@@ -734,7 +734,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
   
 }
 
-MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 'sged', Corr.Struture = c("ica","dcc","copula"), dcc.model = "DCC", 
+MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 'sged', VAR = T,Corr.Struture = c("ica","dcc","copula"), dcc.model = "DCC", 
                      copula.model = list(copula = "mvt", method = "ML", time.varying = FALSE, transformation = "spd"),
                      tgc.type  = "leverage",tgc.targeting = F,mean.model = list(armaOrder = c(0, 0)),CTGC = FALSE,rep_sim = 10){
   
@@ -751,13 +751,25 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
   
   if("ica" %in% Corr.Struture){
     
-    gogarch = rmgarch::gogarchspec(mean.model = list(model = "VAR", robust = FALSE, 
-                                                     lag = 1, lag.max = NULL, lag.criterion = "FPE", 
-                                                     external.regressors = NULL, 
-                                                     robust.control = list("gamma" = 0.25, "delta" = 0.01, "nc" = 10, "ns" = 500)), 
-                                   variance.model = list(model = var.model, garchOrder = c(1,1), submodel = NULL, 
-                                                         variance.targeting = var.targeting), distribution.model = "manig", 
-                                   ica = "fastica", ica.fix = list(A = NULL, K = NULL))
+    if(VAR == T){
+      gogarch = rmgarch::gogarchspec(mean.model = list(model = "VAR", robust = FALSE, 
+                                                       lag = 1, lag.max = NULL, lag.criterion = "FPE", 
+                                                       external.regressors = NULL, 
+                                                       robust.control = list("gamma" = 0.25, "delta" = 0.01, "nc" = 10, "ns" = 500)), 
+                                     variance.model = list(model = var.model, garchOrder = c(1,1), submodel = NULL, 
+                                                           variance.targeting = var.targeting), distribution.model = "manig", 
+                                     ica = "fastica", ica.fix = list(A = NULL, K = NULL)) 
+    }else{
+      gogarch = rmgarch::gogarchspec(mean.model = list(model = "constant", robust = FALSE, 
+                                                       lag = 1, lag.max = NULL, lag.criterion = "FPE", 
+                                                       external.regressors = NULL, 
+                                                       robust.control = list("gamma" = 0.25, "delta" = 0.01, "nc" = 10, "ns" = 500)), 
+                                     variance.model = list(model = var.model, garchOrder = c(1,1), submodel = NULL, 
+                                                           variance.targeting = var.targeting), distribution.model = "manig", 
+                                     ica = "fastica", ica.fix = list(A = NULL, K = NULL))  
+    }
+    
+    
     
     fit_gogarch = rmgarch::gogarchfit(gogarch,ff,out.sample = 0, gfun = "tanh")
     
@@ -812,7 +824,12 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     
     mspec = rugarch::multispec( replicate(q, uspec) )
     
-    dccgarch = rmgarch::dccspec(uspec = mspec, VAR = T, model = dcc.model,distribution = "mvt")
+    if(VAR == T){
+      dccgarch = rmgarch::dccspec(uspec = mspec, VAR = T, model = dcc.model,distribution = "mvt")
+    }else{
+      dccgarch = rmgarch::dccspec(uspec = mspec, VAR = F, model = dcc.model,distribution = "mvt")
+    }
+    
     
     fit_dccgarch = rmgarch::dccfit(dccgarch,ff)
     
@@ -869,7 +886,12 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     
     mspec = rugarch::multispec( replicate(q, uspec) )
     
-    copulagarch = rmgarch::cgarchspec(uspec = mspec, VAR = T, distribution.model = copula.model)
+    if(VAR == T){
+      copulagarch = rmgarch::cgarchspec(uspec = mspec, VAR = T, distribution.model = copula.model)
+    }else{
+      copulagarch = rmgarch::cgarchspec(uspec = mspec, VAR = F, distribution.model = copula.model)
+    }
+    
     
     fit_copulagarch = rmgarch::cgarchfit(copulagarch,ff)
     
