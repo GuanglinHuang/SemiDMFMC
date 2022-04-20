@@ -41,12 +41,12 @@ double lnf_tgc_tv(SEXP ZZZ, SEXP TTT, SEXP T0){
      double zt = ZZ[tt];
   
      if(zt1 > 0){
-       theta1_t = t10 + t11*theta1_t1 + t121*(1 + t13*abs(zt1))*zt1; 
-       theta2_t = t20 + t21*theta2_t1 + t221*(1 + t23*abs(zt1))*zt1;
+       theta1_t = t10 + t11*theta1_t1 + t121*(1 + t13*(zt1))*zt1; 
+       theta2_t = t20 + t21*theta2_t1 + t221*(1 + t23*(zt1))*zt1;
      }
      if(zt1 <= 0){
-       theta1_t = t10 + t11*theta1_t1 + t122*(1 + t13*abs(zt1))*zt1; 
-       theta2_t = t20 + t21*theta2_t1 + t222*(1 + t23*abs(zt1))*zt1;
+       theta1_t = t10 + t11*theta1_t1 + t122*(1 + t13*(-zt1))*zt1; 
+       theta2_t = t20 + t21*theta2_t1 + t222*(1 + t23*(-zt1))*zt1;
      }
 
      gam1 = theta1_t/sqrt(6);
@@ -64,7 +64,7 @@ double lnf_tgc_tv(SEXP ZZZ, SEXP TTT, SEXP T0){
      H4 = (x_t*x_t*x_t*x_t-6*x_t*x_t+3)/sqrt(24);
      phi = 1 + gam1*H3 + gam2*H4;
 
-     fff += -log(b_theta_t) + log(lam) - 0.5*x_t*x_t +  2*log(abs(phi));
+     fff += -log(b_theta_t) + log(lam) - 0.5*x_t*x_t +  log(phi*phi);
      theta1_t1 = theta1_t;
      theta2_t1 = theta2_t;
    }
@@ -111,12 +111,12 @@ NumericVector lnf_tgc_tv_lt(SEXP ZZZ, SEXP TTT, SEXP T0){
     double zt = ZZ[tt];
     
     if(zt1 > 0){
-      theta1_t = t10 + t11*theta1_t1 + t121*(1 + t13*abs(zt1))*zt1; 
-      theta2_t = t20 + t21*theta2_t1 + t221*(1 + t23*abs(zt1))*zt1;
+      theta1_t = t10 + t11*theta1_t1 + t121*(1 + t13*(zt1))*zt1; 
+      theta2_t = t20 + t21*theta2_t1 + t221*(1 + t23*(zt1))*zt1;
     }
     if(zt1 <= 0){
-      theta1_t = t10 + t11*theta1_t1 + t122*(1 + t13*abs(zt1))*zt1; 
-      theta2_t = t20 + t21*theta2_t1 + t222*(1 + t23*abs(zt1))*zt1;
+      theta1_t = t10 + t11*theta1_t1 + t122*(1 + t13*(-zt1))*zt1; 
+      theta2_t = t20 + t21*theta2_t1 + t222*(1 + t23*(-zt1))*zt1;
     }
     
     gam1 = theta1_t/sqrt(6);
@@ -134,7 +134,7 @@ NumericVector lnf_tgc_tv_lt(SEXP ZZZ, SEXP TTT, SEXP T0){
     H4 = (x_t*x_t*x_t*x_t-6*x_t*x_t+3)/sqrt(24);
     phi = 1 + gam1*H3 + gam2*H4;
     
-    fff[tt-1] = -log(b_theta_t) + log(lam) - 0.5*x_t*x_t +  2*log(abs(phi));
+    fff[tt-1] = -log(b_theta_t) + log(lam) - 0.5*x_t*x_t +  log(phi*phi);
     theta1_t1 = theta1_t;
     theta2_t1 = theta2_t;
   }
@@ -182,12 +182,12 @@ double lnf_tgc_tv_tar(SEXP ZZZ, SEXP TTT,SEXP TTT0, SEXP T0){
     double zt = ZZ[tt];
     
     if(zt1 > 0){
-      theta1_t = t10 + t11*theta1_t1 + t121*(1 + t13*abs(zt1))*zt1; 
-      theta2_t = t20 + t21*theta2_t1 + t221*(1 + t23*abs(zt1))*zt1;
+      theta1_t = t10 + t11*theta1_t1 + t121*(1 + t13*(zt1))*zt1; 
+      theta2_t = t20 + t21*theta2_t1 + t221*(1 + t23*(zt1))*zt1;
     }
     if(zt1 <= 0){
-      theta1_t = t10 + t11*theta1_t1 + t122*(1 + t13*abs(zt1))*zt1; 
-      theta2_t = t20 + t21*theta2_t1 + t222*(1 + t23*abs(zt1))*zt1;
+      theta1_t = t10 + t11*theta1_t1 + t122*(1 + t13*(-zt1))*zt1; 
+      theta2_t = t20 + t21*theta2_t1 + t222*(1 + t23*(-zt1))*zt1;
     }
     
     gam1 = theta1_t/sqrt(6);
@@ -205,7 +205,7 @@ double lnf_tgc_tv_tar(SEXP ZZZ, SEXP TTT,SEXP TTT0, SEXP T0){
     H4 = (x_t*x_t*x_t*x_t-6*x_t*x_t+3)/sqrt(24);
     phi = 1 + gam1*H3 + gam2*H4;
     
-    fff += -log(b_theta_t) + log(lam) - 0.5*x_t*x_t +  2*log(abs(phi));
+    fff += -log(b_theta_t) + log(lam) - 0.5*x_t*x_t +  log(phi*phi);
     theta1_t1 = theta1_t;
     theta2_t1 = theta2_t;
   }
@@ -253,12 +253,12 @@ NumericVector lnf_tgc_tv_tar_lt(SEXP ZZZ, SEXP TTT,SEXP TTT0, SEXP T0){
     double zt = ZZ[tt];
     
     if(zt1 > 0){
-      theta1_t = t10 + t11*theta1_t1 + t121*(1 + t13*abs(zt1))*zt1; 
-      theta2_t = t20 + t21*theta2_t1 + t221*(1 + t23*abs(zt1))*zt1;
+      theta1_t = t10 + t11*theta1_t1 + t121*(1 + t13*(zt1))*zt1; 
+      theta2_t = t20 + t21*theta2_t1 + t221*(1 + t23*(zt1))*zt1;
     }
     if(zt1 <= 0){
-      theta1_t = t10 + t11*theta1_t1 + t122*(1 + t13*abs(zt1))*zt1; 
-      theta2_t = t20 + t21*theta2_t1 + t222*(1 + t23*abs(zt1))*zt1;
+      theta1_t = t10 + t11*theta1_t1 + t122*(1 + t13*(-zt1))*zt1; 
+      theta2_t = t20 + t21*theta2_t1 + t222*(1 + t23*(-zt1))*zt1;
     }
     
     gam1 = theta1_t/sqrt(6);
@@ -276,7 +276,7 @@ NumericVector lnf_tgc_tv_tar_lt(SEXP ZZZ, SEXP TTT,SEXP TTT0, SEXP T0){
     H4 = (x_t*x_t*x_t*x_t-6*x_t*x_t+3)/sqrt(24);
     phi = 1 + gam1*H3 + gam2*H4;
     
-    fff[tt-1] = -log(b_theta_t) + log(lam) - 0.5*x_t*x_t +  2*log(abs(phi));
+    fff[tt-1] = -log(b_theta_t) + log(lam) - 0.5*x_t*x_t +  log(phi*phi);
     theta1_t1 = theta1_t;
     theta2_t1 = theta2_t;
   }
