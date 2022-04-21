@@ -632,7 +632,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
     #moment forecasting - CSNP
     theta_tv_inl_con = c(theta_est[1],rep(0,4),theta_est[2],rep(0,4))
     
-    result_moment = tgc_predict(fit_variance,ff,theta_tv_inl,type = type)
+    result_moment = tgc_predict(fit_variance,ff,theta_tv_inl_con,type = type)
     
     #likelihood 
     Lnf_con = likelihood_tgc_con(z,theta_est)$Lnf
@@ -648,7 +648,9 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
       con_tol = list()
       theta_est_tol = list()
       for (bn in 1:rep_sim) {
-        theta_tv_inl = c(0,runif(1,-0.5,0.5),runif(2,-0.2,0.2),0,0,runif(1,-0.5,0.5),runif(2,-0.2,0.2),0)
+        ar1_inl = sample(c(runif(1,0.3,0.8),runif(1,-0.8,-0.3)),1)
+        ar2_inl = sample(c(runif(1,0.3,0.8),runif(1,-0.8,-0.3)),1)
+        theta_tv_inl = c(0,ar1_inl,rep(0,2),0,0,ar2_inl,rep(0,2),0)
         con_tv = try(optim(par = theta_tv_inl, 
                            function(sss){theta_tv = sss[c(2:5,7:10)];
                            theta0 = c(sss[1],sss[6]);
@@ -658,7 +660,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
         if(class(con_tv) == "try-error"){
           theta_est = theta_tv_inl_con
           ll_tol[bn] <- likelihood_tgc_tv_rcpp(z,theta_est[-c(1,6)],theta_est[c(1,6)],type = type)
-          con_tol[[bn]] <- NA
+          con_tol[[bn]] <- list()
           theta_est_tol[[bn]] <- theta_est
         }else{
           theta_est = con_tv$par
@@ -670,6 +672,8 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
       pl = which(ll_tol == max(ll_tol))[1]
       con_tv = con_tol[[pl]]
       theta_est = theta_est_tol[[pl]]
+      
+      rep_con = list(ll_tol = ll_tol, con_tol= con_tol, theta_est_tol = theta_est_tol)
       
       theta_tv_est = theta_est #return
       
@@ -684,7 +688,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
         theta_tv_est[10] <- 0
       }
       
-      if(is.na(con_tv)){
+      if(is.null(con_tv$par)){
         tv_con = NA
       }else{
         std_tv = solve_hess(con_tv$hessian)
@@ -712,7 +716,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
     
     
     result_tv = list(
-      tgc.cof = theta_tv_est, tv_con = tv_con
+      tgc.cof = theta_tv_est, tv_con = tv_con, rep_con = rep_con
     )
     
     #$moment forecasting$
