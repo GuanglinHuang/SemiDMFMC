@@ -274,3 +274,36 @@ Mat.k = function(A,k,eps = 10^-6){
 }
 
 
+SuperDiag = function(x,k){
+  n = length(x)
+  if(k==2){
+    return(diag(x,n,n))
+  }
+  if(k == 3){
+    mat = matrix(0,n,n^2)
+    for (i in 1:n) {
+      mat[i,i + (i-1)*n] <- x[i]
+    }
+    return(mat)
+  }
+  if(k == 4){
+    mat = matrix(0,n,n^3)
+    for (i in 1:n) {
+      mat[i,i + (i-1)*n + (i-1)*n^2] <- x[i]
+    }
+    return(mat)
+  }
+}
+
+
+Vm = function(X,k){
+  X = scale(X,scale = F)
+  return(colMeans(X^k))
+}
+
+
+calcSecs             = function(tt){round(as.numeric(Sys.time())-tt,2)}
+
+
+rescale              = function(v){return(v/norm(as.matrix(v),"F"))}
+
