@@ -547,8 +547,8 @@ TVSNP.test = function(z,result_tv,result_con,type = "leverage"){
   return(list(LR_f = LR_f,LLTV = LLTV,LLC = LLC))
 }
 
-TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 'sstd',
-                   tgc.type  = "leverage",tgc.targeting = F,mean.model = list(armaOrder = c(1, 1)),CTGC = FALSE,rep_sim = 10){
+TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 'sged',
+                   tgc.type  = "leverage",tgc.targeting = F, mean.model = list(armaOrder = c(1,1)),CTGC = FALSE,rep_sim = 10){
   
   type  = tgc.type
   
@@ -580,8 +580,8 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
       if(class(constant_est) == "try-error"){
         theta_est = theta_con_inl
         llc_tol[bn] <- -9999
-        conc_tol[[bn]] <- NULL
-        theta_est_tol[[bn]] = NULL
+        conc_tol[[bn]] <- NA
+        theta_est_tol[[bn]] = NA
       }else{
         theta_est = constant_est$par
         llc_tol[bn] <- likelihood_tgc_con(z,theta_est)$Lnf
@@ -613,7 +613,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
     return(result_con)
   }else{
     #$constant theta estimation$
-    theta_con_inl = c(0,1)
+    theta_con_inl = runif(2,-1,1)
     
     constant_est = optim(par = theta_con_inl, function(theta){
       con = likelihood_tgc_con(z,theta)
@@ -630,7 +630,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
     theta_est = constant_con[,1] #return
     
     #moment forecasting - CSNP
-    theta_tv_inl = c(theta_est[1],rep(0,4),theta_est[2],rep(0,4))
+    theta_tv_inl_con = c(theta_est[1],rep(0,4),theta_est[2],rep(0,4))
     
     result_moment = tgc_predict(fit_variance,ff,theta_tv_inl,type = type)
     
@@ -648,17 +648,18 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
       con_tol = list()
       theta_est_tol = list()
       for (bn in 1:rep_sim) {
-        theta_tv_inl = c(theta_est[1],runif(1,-0.8,0.8),runif(2,-0.3,0.3),0,theta_est[2],runif(1,-0.8,0.8),runif(2,-0.3,0.3),0)
+        theta_tv_inl = c(0,runif(1,-0.5,0.5),runif(2,-0.2,0.2),0,0,runif(1,-0.5,0.5),runif(2,-0.2,0.2),0)
         con_tv = try(optim(par = theta_tv_inl, 
-                           function(s){theta_tv = s[c(2:5,7:10)];
-                           theta0 = c(s[1],s[6]);
+                           function(sss){theta_tv = sss[c(2:5,7:10)];
+                           theta0 = c(sss[1],sss[6]);
                            con = likelihood_tgc_tv_rcpp(z,theta_tv,theta0,type = type); 
-                           return(-con)}, method = "BFGS", hessian = T),silent = T)
+                           return(-con)}, method = "L-BFGS-B", hessian = T),silent = T)
+        
         if(class(con_tv) == "try-error"){
-          theta_est = theta_tv_inl
-          ll_tol[bn] <- -9999
-          con_tol[[bn]] <- NULL
-          theta_est_tol[[bn]] = NULL
+          theta_est = theta_tv_inl_con
+          ll_tol[bn] <- likelihood_tgc_tv_rcpp(z,theta_est[-c(1,6)],theta_est[c(1,6)],type = type)
+          con_tol[[bn]] <- NA
+          theta_est_tol[[bn]] <- theta_est
         }else{
           theta_est = con_tv$par
           ll_tol[bn] <- likelihood_tgc_tv_rcpp(z,theta_est[-c(1,6)],theta_est[c(1,6)],type = type)
@@ -670,7 +671,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
       con_tv = con_tol[[pl]]
       theta_est = theta_est_tol[[pl]]
       
-      theta_tv_est = con_tv$par #return
+      theta_tv_est = theta_est #return
       
       if(tgc.type == "linear"){
         theta_tv_est[5] <- 0
@@ -683,16 +684,21 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
         theta_tv_est[10] <- 0
       }
       
-      std_tv = solve_hess(con_tv$hessian)
-      t_stat_tv = con_tv$par/std_tv
-      p_value_tv = 2*(1-pnorm(abs(t_stat_tv)))
-      tv_con = cbind(theta_tv_est,std_tv,t_stat_tv,p_value_tv)#tv parameters estimation
-      row.names(tv_con)<-c("omega1","alpha1","beta11","beta12","gamma1","omega2","alpha2","beta21","beta22","gamma2")
+      if(is.na(con_tv)){
+        tv_con = NA
+      }else{
+        std_tv = solve_hess(con_tv$hessian)
+        t_stat_tv = con_tv$par/std_tv
+        p_value_tv = 2*(1-pnorm(abs(t_stat_tv)))
+        tv_con = cbind(theta_tv_est,std_tv,t_stat_tv,p_value_tv)#tv parameters estimation
+        row.names(tv_con)<-c("omega1","alpha1","beta11","beta12","gamma1","omega2","alpha2","beta21","beta22","gamma2")
+      } 
+      
     }
     
     # targeting estimation
     if(tgc.targeting){
-      con_tv_tar = optim(par = theta_tv_inl_tar, function(theta_tv){con = likelihood_tgc_tv_targeting_rcpp(z,theta_tv,theta0 = theta_est,type = type);return(-con)}, method = "BFGS", hessian = T)
+      con_tv_tar = optim(par = theta_tv_inl_con, function(theta_tv){con = likelihood_tgc_tv_targeting_rcpp(z,theta_tv,theta0 = theta_est,type = type);return(-con)}, method = "BFGS", hessian = T)
       theta_tv_est_tar = con_tv_tar$par
       std_tv_tar = solve_hess(con_tv_tar$hessian)
       t_stat_tv_tar = con_tv_tar$par/std_tv_tar
@@ -701,7 +707,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
       tv_con = rbind(constant_con[1,],tv_con_tar[1:4,],constant_con[2,],tv_con_tar[5:8,]) #return
       row.names(tv_con_tar)<-c("theta1","alpha1","beta11","beta12","gamma1","theta2","alpha2","beta21","beta22","gamma2")
       
-      theta_tv_est = c(theta_est[1],theta_tv_est_tar[1:4],theta_est[2],theta_tv_est_tar[5:8]) #return
+      theta_tv_est = c(theta_tv_inl_con[1],theta_tv_est_tar[1:4],theta_tv_inl_con[6],theta_tv_est_tar[5:8]) #return
     }
     
     
