@@ -86,45 +86,39 @@ calmoments = function(skew, shape, dist = "sstd"){
   return(value)
 }
 
-VAR = function(w,mu,m2,m3,m4,mv = F,MU = F,...){
-  w = w/sum(w)
-  if(mv == F){
-    sig = sqrt(t(w)%*%m2%*%w)
-    ske = t(w)%*%m3%*%(w%x%w)/sig^3
-    kurt = t(w)%*%m4%*%(w%x%w%x%w)/(sig^4)
-    z = qnorm(alpha)
-    VAR = sig*(z + ske/6*(z^2-1)+kurt/24*(z^3-3*z)-ske^2/36*(2*z^3-5*z))
-    if(MU == T){
-      VAR = t(mu)%*%w + VAR
-    }
-  }
-  if(mv == T){
-    sig = sqrt(t(w)%*%m2%*%w)
-    z = qnorm(alpha)
-    VAR = t(mu)%*%w + sig*z
-  }
-  return(-VAR)
-}
-
-
-Uc=function(w,mu,m2,m3,m4,mv = F,gamma = gamma,MU = F,...){
-  w = w/sum(w)
-  n=length(w)
+Obj.MVaR = function(mmP,alpha = 0.05,...) ###enter moments of portfolio!!
+{
   
-  if(mv == F){
-    
-    U = gamma/2*(t(w)%*%m2%*%w) + gamma*(gamma+1)/6*t(w)%*%m3%*%(w%x%w) - gamma*(gamma+1)*(gamma+2)/24*(t(w)%*%m4%*%(w%x%w%x%w))
-    
-    if(MU == T){
-      U = t(w)%*%mu + U  
-    }
-    
-  }
-  if(mv == T){
-    U = t(mu)%*%w - gamma/2*(t(w)%*%m2%*%w)
-  }
-  return(-U)
+  m2P = mmP[1];
+  m3P = mmP[2];
+  m4P = mmP[3];
+  
+  zalpha = qnorm(alpha);
+  #M2
+  stdP = sqrt(m2P);
+  #M3
+  skewP = m3P/(stdP^3);
+  #M4
+  kurtP = m4P/(stdP^4) - 3;
+  
+  #MVaR
+  Obj = - stdP*zalpha + stdP*(-(1/6)*(zalpha^2-1)*skewP - (1/24)*(zalpha^3-3*zalpha)*kurtP + (1/36)*(2*zalpha^3 - 5*zalpha)*skewP^2);
+  
+  return(Obj)
 }
+
+Obj.EU = function(mmP,gamma = 10,...){
+  
+  m2P = mmP[1];
+  m3P = mmP[2];
+  m4P = mmP[3];
+  
+  #EU
+  Obj =  gamma/2*m2P - gamma*(gamma+1)/6*m3P + gamma*(gamma+1)*(gamma+2)/24*m4P
+  
+  return(Obj)
+}
+
 
 ES = function(w,mu,m2,m3,m4,mv = F,MU = F,...){
   w = w/sum(w)
