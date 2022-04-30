@@ -301,3 +301,49 @@ calcSecs             = function(tt){round(as.numeric(Sys.time())-tt,2)}
 
 rescale              = function(v){return(v/norm(as.matrix(v),"F"))}
 
+
+DNLShrink=function (X, k = 1, ...) 
+{
+  
+  Matmax = function (c = 0, X) 
+  {
+    X[X < c] <- 0
+    return(X)
+  }
+  
+  n = NROW(X)
+  p = NCOL(X)
+  S = cov(X) * (n - 1)/n
+  lambda = eigen(S)$values
+  ts = which(lambda < 10^(-8))
+  if (length(ts) > 0) {
+    lambda[ts] <- lambda[min(ts) - 1]
+  }
+  u = eigen(S)$vectors
+  lambda = lambda[max(1, p - n + 1):p]
+  L = lambda %*% t(rep(1, min(p, n)))
+  h = n^(-0.35)
+  f_tilde = rowMeans(sqrt(Matmax(0, 4 * t(L)^2 * h^2 - (L - 
+                                                          t(L))^2))/(2 * pi * t(L)^2 * h^2))
+  Hf_tilde = rowMeans((sign(L - t(L)) * sqrt(Matmax(0, (L - 
+                                                          t(L))^2 - 4 * t(L)^2 * h^2)) - L + t(L))/(2 * pi * t(L)^2 * 
+                                                                                                      h^2))
+  if (p <= n) {
+    d_tilde = lambda/((pi * (p/n) * lambda * f_tilde)^2 + 
+                        (1 - (p/n) - pi * (p/n) * lambda * Hf_tilde)^2)
+  }
+  else {
+    Hf_tilde0 = (1 - sqrt(1 - 4 * h^2))/(2 * pi * h^2) * 
+      mean(1/lambda)
+    d_tilde0 = 1/(pi * (p - n)/n * Hf_tilde0)
+    d_tilde1 = lambda/(pi^2 * lambda^2 * (f_tilde^2 + Hf_tilde^2))
+    d_tilde = c(rep(d_tilde0, p - n), d_tilde1)
+  }
+  d_hat = Iso::pava(d_tilde, decreasing = T)
+  S_hat = u %*% diag(d_hat^k) %*% t(u)
+  S_sample = u %*% diag(lambda^k) %*% t(u)
+  result = list(S_hat = S_hat, S_sample = S_sample, d_tilde = d_tilde, 
+                d_hat = d_hat, lambda = lambda, u = u, f_tilde = f_tilde, 
+                Hf_tilde = Hf_tilde)
+  return(result)
+}

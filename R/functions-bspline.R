@@ -1,6 +1,20 @@
 bs <- splines::bs
 
-GLR.test = function(yy,xx,mm = 1,KK = 10,rep = 100,...){
+g.inverse = function(X,tol = 10^-5){
+  evd = eigen(X)
+  
+  ev = evd$values
+  evt = evd$vectors
+  
+  id = which(ev > tol)
+  
+  Mat.inv = evt[,id]%*%diag(ev[id]^-1)%*%t(evt[,id])
+  
+  return(Mat.inv)
+}
+
+
+GLR.test = function(yy,xx,mm = 1,KK = 10,rep = 100,trim=0.025,...){
   
   yy = as.matrix(yy)
   xx = as.matrix(xx)
@@ -11,11 +25,8 @@ GLR.test = function(yy,xx,mm = 1,KK = 10,rep = 100,...){
   lmInitial = lm(yy ~ xx)
   
   #(1)BSPLINE-ECSNP estimation
-  alphaInitial = rescale(rowMeans(lmInitial$coefficients)[-1])
   
-  # alphaInitial_fin = alpha_est_inl(yy,xx,mm = mm,alpha_inl = alphaInitial,itermax = 50)
-  
-  result_bsp = coef.bspline(yy,xx,mm = mm,alpha_inl = alphaInitial,K = KK,trim = 0.01,itermax = 1000)
+  result_bsp = coef.bspline(yy,xx,mm = mm,alpha_inl = NULL,K = KK,trim = trim,itermax = 1000)
   
   alpha_est = result_bsp$alpha_est
   e_np = result_bsp$eps_est
@@ -80,7 +91,7 @@ GLR.test = function(yy,xx,mm = 1,KK = 10,rep = 100,...){
     
     #(1)FACE-ECSNP estimation
     
-    result_bsp_bs = beta.bspline(yy_bs,xx,mm = mm,alpha = alpha_est,K = KK,trim = 0.01)
+    result_bsp_bs = beta.bspline(yy_bs,xx,mm = mm,alpha = alpha_est,K = KK,trim = trim)
     
     e_np_bs = result_bsp_bs$eps_est
     e_lm_bs = lm_bs$residuals
@@ -293,12 +304,43 @@ alpha_est_inl = function(yy,xx,alpha_inl,mm = 1,kk = 2,eps = 10^-5,itermax = 500
 }
 
 
-coef.bspline = function(yy,xx,alpha_inl,mm = 1,K = NULL, Kmax = 5, eps = 10^-5, itermax = 100, num_gp = 500, trim = 0.05,Maxisbest = F,...){
+coef.bspline = function(yy,xx,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5, Kmax = 15, eps = 10^-4, itermax = 100, num_gp = 500, trim = 0.05,Maxisbest = F,...){
+  
+  LnAlpha_inl = function(alpha,vv,yy,xx,K,mm,...){
+    
+    alpha = rescale(alpha)
+    pp = NCOL(yy)
+    ss = vv%*%alpha
+    
+    bsp = bs_new(ss,K,mm)
+    
+    ZZ = bsp
+    
+    for (ii in 1:dd) {
+      ZZ = cbind(ZZ,matrix(xx[,ii],nn,K,byrow = F)*bsp)
+    }
+    
+    # theta estimation
+    
+    invzz = try(MASS::ginv(t(ZZ[-c(1:mm),])%*%(ZZ[-c(1:mm),])),silent = T)
+    
+    if(class(invzz)[1] == "try-error"){
+      invzz = g.inverse(t(ZZ[-c(1:mm),])%*%(ZZ[-c(1:mm),]))
+    }
+    
+    theta_est = t(yy[-c(1:mm),])%*%ZZ[-c(1:mm),]%*%invzz
+    
+    loss = sum((yy[-c(1:mm),] - ZZ[-c(1:mm),]%*%t(theta_est))^2)
+    
+    return(loss/pp)
+    
+  }
+  
   
   LnAlpha = function(alpha,theta,vv,yy,xx,K,mm,...){
     
     alpha = rescale(alpha)
-    
+    pp = NCOL(yy)
     ss = vv%*%alpha
     
     bsp = bs_new(ss,K,mm)
@@ -311,7 +353,7 @@ coef.bspline = function(yy,xx,alpha_inl,mm = 1,K = NULL, Kmax = 5, eps = 10^-5, 
     
     loss = sum((yy[-c(1:mm),] - ZZ[-c(1:mm),]%*%t(theta))^2)
     
-    return(loss)
+    return(loss/pp)
     
   }
   
@@ -326,21 +368,33 @@ coef.bspline = function(yy,xx,alpha_inl,mm = 1,K = NULL, Kmax = 5, eps = 10^-5, 
   }else{
     for(i in (mm+1):nn){if(mm==1){vv[i,] = xx[(i-1),]}else{vv[i,] = colSums(xx[(i-1):(i-mm),])/mm}}}
   
+  #initialized 
+  if(is.null(alpha_inl)){
+    opt_inl = Rsolnp::gosolnp(fun = function(z){LnAlpha_inl(z,vv,yy,xx,K,mm)},LB = c(0,rep(-1,dd-1)),UB = rep(1,dd), n.sim = 500,control = list(trace = 0))
+    alpha_inl = rescale(opt_inl$pars) 
+    obj_inl =  tail(opt_inl$values,1) 
+  }else{
+    obj_inl = 1
+  }
   
   if(is.null(K)){
     
     bic = vector()
     alpha_tol = list()
     theta_tol = list()
-    for (K in 3:Kmax){
+    for (K in Kmin:Kmax){
       
+      alpha_new = alpha_inl 
       alpha = rep(0,dd) 
-      alpha_new =  alpha_inl
       iter = 0
       eps = eps
       obj = vector()
+      obj_t = obj_inl+1
+      obj_t1 = obj_inl
       
-      while( sum(abs(alpha - alpha_new)) > eps  ){
+      while( (obj_t - obj_t1) > eps  ){
+        
+        obj_t = obj_t1
         
         alpha = alpha_new
         
@@ -359,13 +413,24 @@ coef.bspline = function(yy,xx,alpha_inl,mm = 1,K = NULL, Kmax = 5, eps = 10^-5, 
         
         # theta estimation
         
-        theta_est = t(yy[-c(1:mm),])%*%ZZ[-c(1:mm),]%*%MASS::ginv(t(ZZ[-c(1:mm),])%*%(ZZ[-c(1:mm),]))
+        invzz = try(MASS::ginv(t(ZZ[-c(1:mm),])%*%(ZZ[-c(1:mm),])),silent = T)
+        
+        if(class(invzz)[1] == "try-error"){
+          invzz = g.inverse(t(ZZ[-c(1:mm),])%*%(ZZ[-c(1:mm),]))
+        }
+        
+        theta_est = t(yy[-c(1:mm),])%*%ZZ[-c(1:mm),]%*%invzz
         
         #alpha estimation
+        # t1 = Sys.time()
+        # opt = optim(par = alpha, fn = function(z){LnAlpha(z,theta_est,vv,yy,xx,K,mm)}, method = "L-BFGS-B")
+        # t2 = Sys.time()
+        # t2-t1
         
-        opt = optim(par = alpha, fn = function(z){LnAlpha(z,theta_est,vv,yy,xx,K,mm)}, method = "L-BFGS-B")
+        opt = Rsolnp::solnp(alpha,fun = function(z){LnAlpha(z,theta_est,vv,yy,xx,K,mm)},control = list(trace = 0))
         
-        alpha_new = rescale(opt$par) 
+        alpha_new = rescale(opt$pars)
+        obj_t1 = tail(opt$values,1)
         
         if(alpha_new[1] < 0){
           alpha_new = - alpha_new
@@ -373,26 +438,27 @@ coef.bspline = function(yy,xx,alpha_inl,mm = 1,K = NULL, Kmax = 5, eps = 10^-5, 
         
         iter = iter + 1
         
-        obj[iter] <- opt$value/pp
+        obj[iter] <-  tail(opt$values,1)
         
-        print(paste0("K=",K," ",obj[iter]))
+        print(paste0("Obj:",round(obj[iter],3),"   ","Difference:",round(abs(obj_t-obj_t1),6)))
         
         if(iter > itermax){
           break
         }
+        
       }
       
-      theta_tol[[K-2]] <- theta_est
+      theta_tol[[K-Kmin+1]] <- theta_est
       
-      alpha_tol[[K-2]] <- alpha_new
+      alpha_tol[[K-Kmin+1]] <- alpha_new
       
-      bic[K-2] = log(opt$value) + 0.5*K*log(nn)/nn 
+      bic[K-Kmin+1] = log(opt$value) + 0.5*K*log(nn)/nn 
       
       alpha_inl = alpha_new
     }
     
     if(Maxisbest == T){
-      K_best = Kmax
+      K_best = Kmax - Kmin + 1
     }else{
       K_best = which(bic == min(bic))
     }
@@ -400,19 +466,23 @@ coef.bspline = function(yy,xx,alpha_inl,mm = 1,K = NULL, Kmax = 5, eps = 10^-5, 
     alpha_hat = alpha_tol[[K_best]]
     theta_hat = theta_tol[[K_best]]
     
-    K_best = K_best + 2
+    K_best = K_best + Kmin - 1
     
     
     
   }else{
     
+    alpha_new = alpha_inl 
     alpha = rep(0,dd) 
-    alpha_new =  alpha_inl
     iter = 0
     eps = eps
     obj = vector()
+    obj_t = obj_inl+1
+    obj_t1 = obj_inl
     
-    while( sum(abs(alpha - alpha_new)) > eps  ){
+    while( (obj_t - obj_t1) > eps  ){
+      
+      obj_t = obj_t1
       
       alpha = alpha_new
       
@@ -431,13 +501,24 @@ coef.bspline = function(yy,xx,alpha_inl,mm = 1,K = NULL, Kmax = 5, eps = 10^-5, 
       
       # theta estimation
       
-      theta_est = t(yy[-c(1:mm),])%*%ZZ[-c(1:mm),]%*%MASS::ginv(t(ZZ[-c(1:mm),])%*%(ZZ[-c(1:mm),]))
+      invzz = try(MASS::ginv(t(ZZ[-c(1:mm),])%*%(ZZ[-c(1:mm),])),silent = T)
+      
+      if(class(invzz)[1] == "try-error"){
+        invzz = g.inverse(t(ZZ[-c(1:mm),])%*%(ZZ[-c(1:mm),]))
+      }
+      
+      theta_est = t(yy[-c(1:mm),])%*%ZZ[-c(1:mm),]%*%invzz
       
       #alpha estimation
+      # t1 = Sys.time()
+      # opt = optim(par = alpha, fn = function(z){LnAlpha(z,theta_est,vv,yy,xx,K,mm)}, method = "L-BFGS-B")
+      # t2 = Sys.time()
+      # t2-t1
       
-      opt = optim(par = alpha, fn = function(z){LnAlpha(z,theta_est,vv,yy,xx,K,mm)}, method = "L-BFGS-B")
+      opt = Rsolnp::solnp(alpha,fun = function(z){LnAlpha(z,theta_est,vv,yy,xx,K,mm)},control = list(trace = 0))
       
-      alpha_new = rescale(opt$par) 
+      alpha_new = rescale(opt$pars)
+      obj_t1 = tail(opt$values,1)
       
       if(alpha_new[1] < 0){
         alpha_new = - alpha_new
@@ -445,9 +526,9 @@ coef.bspline = function(yy,xx,alpha_inl,mm = 1,K = NULL, Kmax = 5, eps = 10^-5, 
       
       iter = iter + 1
       
-      obj[iter] <- opt$value/pp
+      obj[iter] <-  tail(opt$values,1)
       
-      print(obj[iter])
+      print(paste0("Obj:",round(obj[iter],3),"   ","Difference:",round(abs(obj_t-obj_t1),6)))
       
       if(iter > itermax){
         break
@@ -464,7 +545,7 @@ coef.bspline = function(yy,xx,alpha_inl,mm = 1,K = NULL, Kmax = 5, eps = 10^-5, 
   }
   
   #### fit and forecast
- 
+  
   ss_fit = vv%*%alpha_hat
   K = K_best
   
@@ -483,7 +564,7 @@ coef.bspline = function(yy,xx,alpha_inl,mm = 1,K = NULL, Kmax = 5, eps = 10^-5, 
   
   
   ss_fit = na.omit(ss_fit) ######### na omit !!!!!!!!!!!!!!
-
+  
   # zz = calc_grid_points(na.omit(vv),alpha_hat,num_gp = num_gp) #(not good) first, give a grid net; second, delete tail value; third, use interpolate give the fit beta and mu
   
   ss_down = quantile(ss_fit,trim) 
@@ -495,7 +576,7 @@ coef.bspline = function(yy,xx,alpha_inl,mm = 1,K = NULL, Kmax = 5, eps = 10^-5, 
   
   mu_range = bsp[ss_range,]%*%t(theta_hat[,1:K])
   
-
+  
   # bsp = bs_new(zz,K,mm)
   # 
   # zz_range = seq(from = round(num_gp*trim),to = (num_gp*(1-trim)))
@@ -504,14 +585,14 @@ coef.bspline = function(yy,xx,alpha_inl,mm = 1,K = NULL, Kmax = 5, eps = 10^-5, 
   
   mu_fit = matrix(NA,nn,pp)
   mu_fore = vector()
-    
+  
   for (jjj in 1:pp) {
     mu_fit[-c(1:mm),jjj] = approx(ss_fit[ss_range] , mu_range[,jjj], ss_fit , rule = 2)$y 
     
     mu_fore[jjj] = approx(ss_fit[ss_range] , mu_range[,jjj], ss_now , rule = 2)$y 
   }
   
- 
+  
   ##### beta fit
   
   beta_fit = array(NA,dim = c(nn,pp,dd))
@@ -520,16 +601,16 @@ coef.bspline = function(yy,xx,alpha_inl,mm = 1,K = NULL, Kmax = 5, eps = 10^-5, 
   
   for (jj in 1:dd) {
     beta_range = bsp[ss_range,]%*%t(theta_hat[,(jj*K+1):((jj+1)*K)])
-
+    
     for (ii in 1:pp){
       beta_fit[-c(1:mm),ii,jj] = approx(ss_fit[ss_range] , beta_range[,ii], ss_fit , rule = 2)$y
- 
+      
       beta_fore[ii,jj] = approx(ss_fit[ss_range], beta_range[,ii], ss_now , rule = 2)$y
       
     }
- 
-}
-
+    
+  }
+  
   # error estimate
   
   
@@ -540,7 +621,7 @@ coef.bspline = function(yy,xx,alpha_inl,mm = 1,K = NULL, Kmax = 5, eps = 10^-5, 
     eps_est[,uuu] = yy[,uuu] - mu_fit[,uuu]  -  rowSums(beta_fit[,uuu,]*xx) 
     
   }          
-
+  
   con = list(alpha_est   =   alpha_hat,
              mu_est      =   mu_fore,
              beta_est    =   beta_fore,
@@ -564,8 +645,8 @@ coef.bspline = function(yy,xx,alpha_inl,mm = 1,K = NULL, Kmax = 5, eps = 10^-5, 
 
 
 
-beta.bspline = function(yy,xx,alpha,mm = 1,K = NULL, Kmax = 15, num_gp = 500, trim = 0.025,Maxisbest = F,...){
-
+beta.bspline = function(yy,xx,alpha,mm = 1,K = NULL,Kmin = 8, Kmax = 15, num_gp = 500, trim = 0.05,Maxisbest = F,...){
+  
   nn = NROW(yy)
   dd = NCOL(xx)
   pp = NCOL(yy)
@@ -582,45 +663,8 @@ beta.bspline = function(yy,xx,alpha,mm = 1,K = NULL, Kmax = 15, num_gp = 500, tr
     
     bic = vector()
     theta_tol = list()
-    for (K in 3:Kmax){
+    for (K in Kmin:Kmax){
       
-        ss = vv%*%alpha
-        
-        bsp = bs_new(ss,K,mm)
-        
-        theta = rep(1,(dd+1)*K)
-        
-        ZZ = bsp
-        
-        for (ii in 1:dd) {
-          ZZ = cbind(ZZ,matrix(xx[,ii],nn,K,byrow = F)*bsp)
-          
-        }
-        
-        # theta estimation
-        
-      theta_est = t(yy[-c(1:mm),])%*%ZZ[-c(1:mm),]%*%MASS::ginv(t(ZZ[-c(1:mm),])%*%(ZZ[-c(1:mm),]))
-
-      obj <- sum((yy[-c(1:mm),] - ZZ[-c(1:mm),]%*%t(theta_est))^2)/pp
-        
-      theta_tol[[K-2]] <- theta_est
-  
-      bic[K-2] = log(obj) + 0.5*K*log(nn)/nn 
-      
-    }
-    
-    if(Maxisbest == T){
-      K_best = Kmax - 2
-    }else{
-      K_best = which(bic == min(bic))
-    }
-
-    theta_hat = theta_tol[[K_best]]
-    
-    K_best = K_best + 2
-
-  }else{
-    
       ss = vv%*%alpha
       
       bsp = bs_new(ss,K,mm)
@@ -636,9 +680,58 @@ beta.bspline = function(yy,xx,alpha,mm = 1,K = NULL, Kmax = 15, num_gp = 500, tr
       
       # theta estimation
       
-      theta_est = t(yy[-c(1:mm),])%*%ZZ[-c(1:mm),]%*%MASS::ginv(t(ZZ[-c(1:mm),])%*%(ZZ[-c(1:mm),]))
+      invzz = try(MASS::ginv(t(ZZ[-c(1:mm),])%*%(ZZ[-c(1:mm),])),silent = T)
       
-
+      if(class(invzz)[1] == "try-error"){
+        invzz = g.inverse(t(ZZ[-c(1:mm),])%*%(ZZ[-c(1:mm),]))
+      }
+      
+      theta_est = t(yy[-c(1:mm),])%*%ZZ[-c(1:mm),]%*%invzz
+      
+      obj <- sum((yy[-c(1:mm),] - ZZ[-c(1:mm),]%*%t(theta_est))^2)/pp
+      
+      theta_tol[[K-Kmin+1]] <- theta_est
+      
+      bic[K-Kmin+1] = log(obj) + 0.5*K*log(nn)/nn 
+      
+    }
+    
+    if(Maxisbest == T){
+      K_best = Kmax - Kmin + 1
+    }else{
+      K_best = which(bic == min(bic))
+    }
+    
+    theta_hat = theta_tol[[K_best]]
+    
+    K_best = K_best + Kmin - 1
+    
+  }else{
+    
+    ss = vv%*%alpha
+    
+    bsp = bs_new(ss,K,mm)
+    
+    theta = rep(1,(dd+1)*K)
+    
+    ZZ = bsp
+    
+    for (ii in 1:dd) {
+      ZZ = cbind(ZZ,matrix(xx[,ii],nn,K,byrow = F)*bsp)
+      
+    }
+    
+    # theta estimation
+    
+    invzz = try(MASS::ginv(t(ZZ[-c(1:mm),])%*%(ZZ[-c(1:mm),])),silent = T)
+    
+    if(class(invzz)[1] == "try-error"){
+      invzz = g.inverse(t(ZZ[-c(1:mm),])%*%(ZZ[-c(1:mm),]))
+    }
+    
+    theta_est = t(yy[-c(1:mm),])%*%ZZ[-c(1:mm),]%*%invzz
+    
+    
     K_best = K
     bic    = NULL
     theta_tol = NULL
@@ -713,7 +806,7 @@ beta.bspline = function(yy,xx,alpha,mm = 1,K = NULL, Kmax = 15, num_gp = 500, tr
   }
   
   # error estimate
-
+  
   eps_est  = matrix(NA,nn,pp)
   
   for (uuu in 1:pp) {
@@ -744,173 +837,3 @@ beta.bspline = function(yy,xx,alpha,mm = 1,K = NULL, Kmax = 15, num_gp = 500, tr
 
 
 
-face_roll_bspline = function(x,KK,...){
-  
-  tt_year = x
-  
-  data_sample_i = data_sample[(tt_year):(tt_year+TT_train-1),]
-  
-  if(tt_year == tail(TT_test_bk,1)){
-    return_sample_i = data_sample[(tt_year+TT_train):TT_tol,]
-    name_i = row.names(data_sample)[(tt_year+TT_train):TT_tol]
-  }else{
-    return_sample_i = data_sample[(tt_year+TT_train):(tt_year+TT_train+bk-1),]
-    name_i = row.names(data_sample)[(tt_year+TT_train):(tt_year+TT_train+bk-1)]
-  }
-  
-  
-  ff_sample_i = as.matrix(ff_sample[(tt_year):(tt_year+TT_train-1)])
-  ff3_sample_i = as.matrix(ff3_sample[(tt_year):(tt_year+TT_train-1),])
-  
-  ############### 2.1 estimation procedure ################
-  
-  lmInitial = lm(data_sample_i ~ ff3_sample_i)
-  
-  #(1)FACE-ECSNP estimation
-  alphaInitial = rescale(rowMeans(lmInitial$coefficients)[-1])
-  
-  alphaInitial_fin = alpha_est_inl(data_sample_i,ff3_sample_i,alpha_inl = alphaInitial)
-  
-  result_bsp = coef.bspline(data_sample_i,ff3_sample_i,alpha_inl = alphaInitial_fin$alpha,K = KK,trim = 0.025,itermax = 500)
-  
-    
-  # result_bsp$K_best
-  
-  # plot(result_bsp$bic)
-   
-  alpha_est =  result_bsp$alpha_est
-  u_est     =  result_bsp$mu_est
-  beta_est  =  result_bsp$beta_est
-  K_best    =  result_bsp$K_best
-  
-  beta_fit = result_bsp$beta_fit
-  
-  eps_est  = result_bsp$eps_est
-  
-  
-  result_face = result_roll_face[[tt_year]]
-  
-  factor_moments  =  result_roll_face[[tt_year]]$factor_moments
-  
-  factor_moments_ica = factor_moments$ica_moments
-  factor_moments_dcc = factor_moments$dcc_moments
-  factor_moments_copula = factor_moments$copula_moments
-  
-  vff <- vars::VAR(ff3_sample_i,type = "const")
-  f_fore = predict(vff,n.ahead = 1)
-  mu_f3_fore = c(f_fore$fcst[[1]][1],f_fore$fcst[[2]][1],f_fore$fcst[[3]][1])
-  
-  #########eps moments
-  
-  e_var_fore_mf_con <- vector()
-  e_skew_fore_mf_con <- vector()
-  e_kurt_fore_mf_con <- vector()
-  
-  con_residuals <- list()
-  
-  for (kk in 1:n){
-    e_ik = eps_est[-(1:mm),kk]
-    
-    est_ei_snp =  TGC_est(e_ik,var.model = "sGARCH", var.targeting = F, 
-                                    var.distribution = "sged", tgc.type = "leverage", 
-                                    tgc.targeting = F, mean.model = list(armaOrder = c(0,0)), CTGC = T, rep_sim = 10)
-    
-    con_residuals[[kk]] <- est_ei_snp
-    
-    e_var_fore_mf_con[kk] <- est_ei_snp$result_moment$mm.fore[2]
-    e_skew_fore_mf_con[kk] <- est_ei_snp$result_moment$mm.fore[3]
-    e_kurt_fore_mf_con[kk] <- est_ei_snp$result_moment$mm.fore[4]
-    
-  }
-  
-  face_residual_moments = list(e_var_fore_mf_con,e_skew_fore_mf_con,e_kurt_fore_mf_con) 
-  
-  #save result of vc-mf-tvsnp
-  result_roll_bs            <- list(alpha            =  alpha_est, 
-                                      mu             =  u_est, 
-                                      mu_f           =  mu_f3_fore,
-                                      beta           =  beta_est, 
-                                      factor_moments =  factor_moments, 
-                                      eps_moments    =  face_residual_moments)
-  
-  ###portfolio
-  #2.1 MZ-3F
-  beta_3f = t(lmInitial$coefficients[-1,])
-  mu_3f = lmInitial$coefficients[1,] + beta_3f%*%colMeans(ff3_sample_i)
-  
-  #3.1 SEMI-3F-ECSNP-ICA
-  beta_3f_face  = beta_est
-  mu_3f_face = u_est + beta_3f_face%*%mu_f3_fore
-  # mu_3f_face = colMeans(data_sample_i)
-  mmf_3f_snp_ica = factor_moments_ica
-  mme_3f_snp_face = face_residual_moments
-  
-  EU_FACEECSNP_3F_ica = function(z){
-    mmP = Portfolio.Cumulants.Mat(z,mm_factor = mmf_3f_snp_ica,mm_eps = mme_3f_snp_face,A = beta_3f_face)
-    obj = Obj.EU(mmP,gamma = gamma);return(obj)
-  }
-  eq_3f_face = function(x){z1=sum(x);return(z1)}
-  ineq_3f_face = function(x){sum(x*mu_3f_face)}
-  ineq_3f = function(x){sum(x*mu_3f)}
-  
-  #3.2 SEMI-3F-ECSNP-DCC
-  mmf_3f_snp_dcc = factor_moments_dcc
-  
-  EU_FACEECSNP_3F_dcc = function(z){
-    mmP = Portfolio.Cumulants.Mat(z,mm_factor = mmf_3f_snp_dcc,mm_eps = mme_3f_snp_face,A = beta_3f_face)
-    obj = Obj.EU(mmP,gamma = gamma);return(obj)
-  }
-  
-  #3.3 SEMI-3F-ECSNP-copula
-  mmf_3f_snp_copula = factor_moments_copula
-  
-  EU_FACEECSNP_3F_copula = function(z){
-    mmP = Portfolio.Cumulants.Mat(z,mm_factor = mmf_3f_snp_copula,mm_eps = mme_3f_snp_face,A = beta_3f_face)
-    obj = Obj.EU(mmP,gamma = gamma);return(obj)
-  }
-  
-  
-  lb = -5;ub = 5;delta = 1;gamma = 5
-  ############################2.3 portfolio selection###########################
- 
-  rsol_3f_snp_ica    = Rsolnp::solnp(pars = rep(1/n,n),fun = EU_FACEECSNP_3F_ica,eqfun = eq_3f_face,ineqfun = ineq_3f,ineqLB = delta,ineqUB = 100,eqB = 1,LB = rep(lb,n),UB = rep(ub,n))
-  rsol_3f_snp_dcc    = Rsolnp::solnp(pars = rep(1/n,n),fun = EU_FACEECSNP_3F_dcc,eqfun = eq_3f_face,ineqfun = ineq_3f,ineqLB = delta,ineqUB = 100,eqB = 1,LB = rep(lb,n),UB = rep(ub,n))
-  rsol_3f_snp_copula = Rsolnp::solnp(pars = rep(1/n,n),fun = EU_FACEECSNP_3F_copula,eqfun = eq_3f_face,ineqfun = ineq_3f,ineqLB = delta,ineqUB = 100,eqB = 1,LB = rep(lb,n),UB = rep(ub,n))
-  
-  rsol_3f_face_ica    = Rsolnp::solnp(pars = rep(1/n,n),fun = EU_FACEECSNP_3F_ica,eqfun = eq_3f_face,ineqfun = ineq_3f_face,ineqLB = delta,ineqUB = 100,eqB = 1,LB = rep(lb,n),UB = rep(ub,n))
-  rsol_3f_face_dcc    = Rsolnp::solnp(pars = rep(1/n,n),fun = EU_FACEECSNP_3F_dcc,eqfun = eq_3f_face,ineqfun = ineq_3f_face,ineqLB = delta,ineqUB = 100,eqB = 1,LB = rep(lb,n),UB = rep(ub,n))
-  rsol_3f_face_copula = Rsolnp::solnp(pars = rep(1/n,n),fun = EU_FACEECSNP_3F_copula,eqfun = eq_3f_face,ineqfun = ineq_3f_face,ineqLB = delta,ineqUB = 100,eqB = 1,LB = rep(lb,n),UB = rep(ub,n))
-
-  
-  
-  w_3f_snp_ica       =    rsol_3f_snp_ica$pars
-  w_3f_snp_dcc       =    rsol_3f_snp_dcc$pars
-  w_3f_snp_copula    =    rsol_3f_snp_copula$pars
-  
-  
-  w_3f_face_ica       =    rsol_3f_face_ica$pars
-  w_3f_face_dcc       =    rsol_3f_face_dcc$pars
-  w_3f_face_copula    =    rsol_3f_face_copula$pars
-  
-  
-  eq = rep(1/n,n)
-  
-  u_total = cbind(eq, 
-                  f3_snp_ica        =  w_3f_snp_ica,
-                  f3_snp_dcc        =  w_3f_snp_dcc,
-                  f3_snp_copula     =  w_3f_snp_copula,
-                  f3_face_ica       =  w_3f_face_ica,
-                  f3_face_dcc       =  w_3f_face_dcc,
-                  f3_face_copula    =  w_3f_face_copula
-  )
-  
-if(NROW(return_sample_i) == 1){
-    r_total_u =  t(return_sample_i)%*%u_total 
-  }else{
-    r_total_u =  return_sample_i%*%u_total
-}
-  
-  con = list(r_total_u = r_total_u,u_total = u_total,K_best = K_best,beta_est = beta_est , alpha_est = alpha_est, result_roll_bs = result_roll_bs)
-  
-  return(con)
-}

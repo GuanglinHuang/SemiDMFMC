@@ -1,10 +1,10 @@
 Package: SemiDMFMC
 Type: Package
-Title: What the package does (short line)
-Version: 0.2
+Title: Semi Dynamic Multi-Factor Multi-Cumulants Estimation
+Version: 0.3.0
 Date: 2022-03-19
 Author: Guanglin Huang
-Maintainer: Who to complain to <yourfault@somewhere.net>
+Maintainer: Guanglin Huang <huang.guanglin@yahoo.com>
 Description: More about what it does (maybe more than one line)
 License: What license is it under?
 Imports: 
@@ -15,6 +15,7 @@ Imports:
     PerformanceAnalytics,
     np,
     ica,
+    Iso,
     Rsolnp,
     ncvreg,
     gtools,
