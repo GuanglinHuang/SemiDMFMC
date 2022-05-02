@@ -25,15 +25,17 @@
 # con = SemiDMFMC(X,ff_l,ff_nl,Z)
 
 
-SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
+SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,FL.type = c("VCM","SIVCM"),
                      con_residual = T,best_model = NULL,
                      Penalty = c("NONE","LASSO","MCP","SCAD"),
+                     factorloading.control = list(alpha.type = 1, mm = 1, K = 15,
+                                       Kmin = 10, Kmax = 20, np.eps = 10^-4, np.itermax = 500, trim = 0.05, M.B = FALSE),
                      factor.control = list(var.model = "sGARCH", var.targeting = F, var.distribution = "sged", 
                                            Corr.Struture = c("ica", "dcc", "copula"), dcc.model = "DCC", 
-                                           copula.model = list(copula = "mvt", method = "ML", time.varying = FALSE, 
+                                           copula.model = list(copula = "mvt", method = "ML", time.varying = TRUE, 
                                                                transformation = "spd"), tgc.type = "leverage", tgc.targeting = F, 
-                                           mean.model = list(armaOrder = c(1, 1)), CTGC = FALSE, rep_sim_f = 10),
-                     eps.control    = list(var.model = "sGARCH", var.targeting = F, var.distribution = "sged",tgc.type = "leverage", 
+                                           mean.model = list(armaOrder = c(1, 1)), CTGC = FALSE, rep_sim_f = 30),
+                     error.control    = list(var.model = "sGARCH", var.targeting = F, var.distribution = "sged",tgc.type = "leverage", 
                                            tgc.targeting = F, mean.model = list(armaOrder = c(0,0)), rep_sim_e = 10),...){
   n  = NCOL(X)
   t  = NROW(X)
@@ -53,9 +55,12 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
   
   if(SemiFL == T){
     
-    print("Estimating the [Factor Loadings] with [Semi-parametric] function")
+    cat("        ######################################################################################","\n",
+        "       ########## Estimating the [Factor Loadings] with [Semi-parametric] function ##########","\n",
+        "       ######################################################################################","\n",
+        "\n")
     
-    if(sel.bw == "uni"){
+    if(FL.type == "VCM"){
       
       reg = lm(as.matrix(X) ~ as.matrix(ff))
       e_i_lm = reg$residuals
@@ -110,6 +115,8 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
       
       R2_ratio = mean(e_i_np^2)/mean(e_i_lm^2)
       
+   
+      
       result_npscoef = list(mu = mu_np,beta = beta_np, 
                             e =  e_i_np,
                             R2_ratio = R2_ratio, np_bw = np_bw,
@@ -118,37 +125,96 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
       result_lm = list(mu = mu_i_lm,beta = beta_i_lm, 
                        e  = e_i_lm)
       
+      e_i_np     = result_npscoef$e
+      beta_np    = result_npscoef$beta
+      u_np       = result_npscoef$mu
+      alpha_np   = NA
+      
     }
     
     
     
-    # if(sel.bw == "multi"){ #need improve
-    # 
-    #   h1_est = cv_h1_tv_cpp(M = 0.1,X,ff,kmax = 100,type = "knn")
-    #   h1 = h1_est[[1]]
-    # 
-    #   est = npest_tv_rcpp(sp500_sample_i[t],h1,data_sample_i[1:t,],as.matrix(sp500_sample_i[1:t]))
-    #   mu_np <- est[,1]
-    #   beta_np <- est[,2]
-    # 
-    #   e_i_np  = matrix(NA,t,n)
-    # 
-    #   est_cof = apply(as.matrix(sp500_sample_i[1:(t-1)]),1,function(x){npest_tv_rcpp(x,h1,data_sample[1:t,],as.matrix(sp500_sample_i[1:t]))[,1:2]})
-    # 
-    #   mu_fit = t(est_cof[1:n,])
-    #   beta_fit = t(est_cof[(n+1):(2*n),])
-    # 
-    #   e_i_np[2:t,]  = data_sample_i[2:t,] - mu_fit - beta_fit*sp500_sample_i[2:t]
-    #   e_i_np[1,] <- e_i[1,]
-    # 
-    # }
+    if(FL.type == "SIVCM"){
+
+      reg = lm(as.matrix(X) ~ as.matrix(ff))
+      e_i_lm = reg$residuals
+      mu_i_lm = reg$coefficients[1,]
+      beta_i_lm = as.matrix(reg$coefficients[-1,])
+      
+      if((qq) > 1){
+        beta_i_lm = t(reg$coefficients[-1,])
+      }
+      
+      if(qq == 1){
+        
+        stop("Single Index Varying Coefficient Model is only used for Multi-factor model!!")
+      
+      }
+ 
+      #control list
+      alpha.type = factorloading.control$alpha.type
+      mm         = factorloading.control$mm
+      KKK        = factorloading.control$K
+      Kmin       = factorloading.control$Kmin
+      Kmax       = factorloading.control$Kmax
+      np.eps     = factorloading.control$np.eps
+      np.itermax = factorloading.control$np.itermax
+      trim       = factorloading.control$trim
+      M.B        = factorloading.control$M.B
+      
+      
+      if(alpha.type == 1){
+        
+        lmInitial = lm(as.matrix(X) ~ as.matrix(Z))
+        
+        alphaInitial = rescale(rowMeans(lmInitial$coefficients)[-1])
+
+        alpha_inl = alphaInitial
+        
+        result_np = coef.bspline(yy = X,xx = ff, zz = Z, alpha_inl = alpha_inl, mm = mm, K = KKK,
+                                 Kmin = Kmin, Kmax = Kmax, eps = np.eps, itermax = np.itermax, trim = trim, Maxisbest = M.B)
+        
+      }
+      
+      if(alpha.type == 0){
+        alpha_inl = NULL
+        
+        result_np = coef.bspline(yy = X,xx = ff, zz = Z, alpha_inl = alpha_inl, mm = mm, K = KKK,
+                                 Kmin = Kmin, Kmax = Kmax, eps = np.eps, itermax = np.itermax, trim = trim, Maxisbest = M.B)
+      }
+      
+      if(alpha.type == 2){
+
+        result_np = beta.bspline(yy = X,xx = ff, zz = Z, alpha = alpha0, mm = mm, K = KKK,
+                                 Kmin = Kmin, Kmax = Kmax, trim = trim, Maxisbest = M.B)
+        
+        
+      }
+      
+
+      result_npscoef = result_np
+      
+      result_lm = list(mu = mu_i_lm,beta = beta_i_lm, 
+                       e  = e_i_lm)
+      
+      e_i_np     = result_npscoef$eps_est
+      beta_np    = result_npscoef$beta_est
+      u_np       = result_npscoef$mu_est
+      alpha_np   = result_npscoef$alpha_est
+      
+      
+    }
     
     
   }else{
     
     if(NCOL(ff) == 1){
       
-      print("Estimating the [Factor Loadings] of [Factors]")
+      
+      cat("        ######################################################################################","\n",
+          "       ##########       Estimating the [Factor Loadings] of [Single Factor]        ##########","\n",
+          "       ######################################################################################","\n",
+          "\n")
       
       reg = lm(as.matrix(X) ~ as.matrix(ff))
       e_i_lm = reg$residuals
@@ -160,7 +226,10 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
 
       if(Penalty == "NONE"){
         
-        print("Estimating the [Factor Loadings] of [Factors]")
+        cat("        ######################################################################################","\n",
+            "       ##########       Estimating the [Factor Loadings] of [Multi-Factors]        ##########","\n",
+            "       ######################################################################################","\n",
+            "\n")
         
         reg = lm(as.matrix(X) ~ as.matrix(ff))
         e_i_lm = reg$residuals
@@ -168,9 +237,12 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
         beta_i_lm = t(reg$coefficients[-1,])
       }
       if(Penalty == "LASSO"){
-        
-        print("Estimating the [Factor Loadings] of [Multi Factors] with [Lasso]")
-        
+
+        cat("        ######################################################################################","\n",
+            "       ########## Estimating the [Factor Loadings] of [Multi Factors] with [Lasso] ##########","\n",
+            "       ######################################################################################","\n",
+            "\n")
+
         coef_lm =  apply(as.matrix(X), 2, function(x){
           cvfit <- ncvreg::cv.ncvreg(X = ff, y = x, penalty="lasso",family = "gaussian")
           return(coef(cvfit))
@@ -181,7 +253,10 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
       }
       if(Penalty == "SCAD"){
         
-        print("Estimating the [Factor Loadings] of [Multi Factors] with [SCAD]")
+        cat("        ######################################################################################","\n",
+            "       ########## Estimating the [Factor Loadings] of [Multi Factors] with [SCAD]  ##########","\n",
+            "       ######################################################################################","\n",
+            "\n")
         
         coef_lm =  apply(as.matrix(X), 2, function(x){
           cvfit <- ncvreg::cv.ncvreg(X = ff, y = x, penalty="SCAD",family = "gaussian")
@@ -193,7 +268,10 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
       }
       if(Penalty == "MCP"){
         
-        print("Estimating the [Factor Loadings] of [Multi Factors] with [MCP]")
+        cat("        ######################################################################################","\n",
+            "       ##########  Estimating the [Factor Loadings] of [Multi Factors] with [MCP]  ##########","\n",
+            "       ######################################################################################","\n",
+            "\n")
         
         coef_lm =  apply(as.matrix(X), 2, function(x){
           cvfit <- ncvreg::cv.ncvreg(X = ff, y = x, penalty="MCP",family = "gaussian")
@@ -211,7 +289,11 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
   
   if(NCOL(ff) > 1){
     
-    print("Estimating the higher-order [Time-Varying] structure of [Multi Factors]")
+    cat("        ######################################################################################","\n",
+        "       ##########    Estimating the [Time-Varying] structure of [Multi-Factors]    ##########","\n",
+        "       ######################################################################################","\n",
+        "\n")
+
     
     var.model        =  factor.control$var.model
     var.targeting    =  factor.control$var.targeting
@@ -240,15 +322,17 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
     tgc.type         =  factor.control$tgc.type
     tgc.targeting    =  factor.control$tgc.targeting
     mean.model       =  factor.control$mean.model
-    CTGC             =  factor.control$CTGC
     rep_sim_f        =  factor.control$rep_sim_f
     
-    print("Estimating the higher-order [Time-Varying] structure of [Single Factor]")
+    cat("        ######################################################################################","\n",
+        "       ##########    Estimating the [Time-Varying] structure of [Single-Factors]   ##########","\n",
+        "       ######################################################################################","\n",
+        "\n")
     
     est_tgc = TGC_est(ff,var.model = var.model,var.targeting = var.targeting, 
                       var.distribution = var.distribution, tgc.type = tgc.type, 
                       tgc.targeting = tgc.targeting, mean.model = mean.model,
-                      CTGC = CTGC,rep_sim = rep_sim_f)
+                      CTGC = T,rep_sim = rep_sim_f)
     
     mu_f_fore = est_tgc$result_moment$mm.fore[1]
     var_f_fore = est_tgc$result_moment$mm.fore[2]
@@ -256,7 +340,7 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
     kurt_f_fore = est_tgc$result_moment$mm.fore[4]
     
     factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore)
-    result_factors = list(result_snp = est_tgc,factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore))
+    result_factors = est_tgc
   }
   
   #residual moment estimation
@@ -268,15 +352,18 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
   
   if(con_residual == T){
     
-    print("Estimating the higher-order [Constant] structure of [Idiosyncratic Errors]")
-    
-    var.model        =  eps.control$var.model
-    var.targeting    =  eps.control$var.targeting
-    var.distribution =  eps.control$var.distribution
-    tgc.type         =  eps.control$tgc.type
-    tgc.targeting    =  eps.control$tgc.targeting
-    mean.model       =  eps.control$mean.model
-    rep_sim_e        =  eps.control$rep_sim_e
+    cat("        ######################################################################################","\n",
+        "       ##########  Estimating the [Constant] structure of [Idiosyncratic Errors]   ##########","\n",
+        "       ######################################################################################","\n",
+        "\n")
+
+    var.model        =  error.control$var.model
+    var.targeting    =  error.control$var.targeting
+    var.distribution =  error.control$var.distribution
+    tgc.type         =  error.control$tgc.type
+    tgc.targeting    =  error.control$tgc.targeting
+    mean.model       =  error.control$mean.model
+    rep_sim_e        =  error.control$rep_sim_e
 
     e_var_fore_mf_con <- vector()
     e_skew_fore_mf_con <- vector()
@@ -290,7 +377,7 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
       
       est_ei_snp = TGC_est(e_ik,var.model = var.model, var.targeting = var.targeting, 
                                       var.distribution = var.distribution, tgc.type = tgc.type, 
-                                      tgc.targeting = tgc.targeting, mean.model = mean.model, CTGC = TRUE, rep_sim = rep_sim_e)
+                                      tgc.targeting = tgc.targeting, mean.model = mean.model, CTGC = T, rep_sim = rep_sim_e)
       
       con_residuals[[kk]] <- est_ei_snp
       
@@ -302,13 +389,15 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
     
     residual_moments = list(e_var_fore_mf_con,e_skew_fore_mf_con,e_kurt_fore_mf_con) 
     result_residuals_semi = NULL
-    result_residuals_lm = list(residual_snp = con_residuals, 
-                               residual_moments = residual_moments)
+    result_residuals_lm = con_residuals
     
     
     if(SemiFL == T){
       
-      print("Estimating the higher-order [Constant] structure of [Idiosyncratic Errors] for [Semi Factor Loadings]")
+      cat("        ######################################################################################","\n",
+          "       #####  Estimating the [Constant] structure of [Idiosyncratic Errors] for [SFL]  ######","\n",
+          "       ######################################################################################","\n",
+          "\n")
 
       e_var_fore_smf_con <- vector()
       e_skew_fore_smf_con <- vector()
@@ -317,11 +406,16 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
       con_residuals_semi <- list()
       
       for (kk in 1:n){
-        e_ik = e_i_np[-1,kk]
         
+        if(FL.type == "SIVCM"){
+          e_ik = e_i_np[-c(1:mm),kk]
+        }else{
+          e_ik = e_i_np[-1,kk]
+        }
+
         est_ei_snp = TGC_est(e_ik,var.model = var.model, var.targeting = var.targeting, 
                              var.distribution = var.distribution, tgc.type = tgc.type, 
-                             tgc.targeting = tgc.targeting, mean.model = mean.model, CTGC = TRUE, rep_sim = rep_sim_e)
+                             tgc.targeting = tgc.targeting, mean.model = mean.model, CTGC = T, rep_sim = rep_sim_e)
         
         con_residuals_semi[[kk]] <- est_ei_snp
         
@@ -332,21 +426,23 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
       }
       
       residual_moments = list(e_var_fore_smf_con,e_skew_fore_smf_con,e_kurt_fore_smf_con)
-      result_residuals_semi = list(residual_snp = con_residuals_semi, 
-                                   residual_moments = residual_moments)
+      result_residuals_semi = con_residuals_semi
     }
     
   }else{
     
-    print("Estimating the higher-order [Time-Varying] structure of [Idiosyncratic Errors]")
-    
-    var.model        =  eps.control$var.model
-    var.targeting    =  eps.control$var.targeting
-    var.distribution =  eps.control$var.distribution
-    tgc.type         =  eps.control$tgc.type
-    tgc.targeting    =  eps.control$tgc.targeting
-    mean.model       =  eps.control$mean.model
-    rep_sim_e        =  eps.control$rep_sim_e
+    cat("        ######################################################################################","\n",
+        "       ######    Estimating the [Time-Varying] structure of [Idiosyncratic Errors]     ######","\n",
+        "       ######################################################################################","\n",
+        "\n")
+
+    var.model        =  error.control$var.model
+    var.targeting    =  error.control$var.targeting
+    var.distribution =  error.control$var.distribution
+    tgc.type         =  error.control$tgc.type
+    tgc.targeting    =  error.control$tgc.targeting
+    mean.model       =  error.control$mean.model
+    rep_sim_e        =  error.control$rep_sim_e
     
     
     e_var_fore_mf_tv <- vector()
@@ -377,20 +473,22 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
     
     result_residuals_tv_semi = NULL
     
-    result_residuals_tv_lm = list(residual_snp = con_residuals_tv, 
-                                  residual_moments = residual_moments)
+    result_residuals_tv_lm = con_residuals_tv
     
     if(SemiFL == T){
       
-      print("Estimating the higher-order [Time-Varying] structure of [Idiosyncratic Errors] for [Semi Factor Loadings]")
+      cat("        ######################################################################################","\n",
+          "       ###  Estimating the [Time-Varying] structure of [Idiosyncratic Errors] for [SFL]   ###","\n",
+          "       ######################################################################################","\n",
+          "\n")
       
-      var.model        =  eps.control$var.model
-      var.targeting    =  eps.control$var.targeting
-      var.distribution =  eps.control$var.distribution
-      tgc.type         =  eps.control$tgc.type
-      tgc.targeting    =  eps.control$tgc.targeting
-      mean.model       =  eps.control$mean.model
-      rep_sim_e        =  eps.control$rep_sim_e
+      var.model        =  error.control$var.model
+      var.targeting    =  error.control$var.targeting
+      var.distribution =  error.control$var.distribution
+      tgc.type         =  error.control$tgc.type
+      tgc.targeting    =  error.control$tgc.targeting
+      mean.model       =  error.control$mean.model
+      rep_sim_e        =  error.control$rep_sim_e
       
       e_var_fore_smf_tv <- vector()
       e_skew_fore_smf_tv <- vector()
@@ -399,7 +497,13 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
       con_residuals_tv_semi <- list()
       
       for (kk in 1:n){
-        e_ik = e_i_np[-1,kk]
+        
+        if(FL.type == "SIVCM"){
+          e_ik = e_i_np[-c(1:mm),kk]
+        }else{
+          e_ik = e_i_np[-1,kk]
+        }
+        
         
         est_ei_snp = TGC_est(e_ik,var.model = var.model, var.targeting = var.targeting, 
                              var.distribution = var.distribution, tgc.type = tgc.type, 
@@ -412,9 +516,10 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
         e_kurt_fore_smf_tv[kk] <- est_ei_snp$result_moment$mm.fore[4]
         
       }
+      
       residual_moments = list(e_var_fore_smf_tv,e_skew_fore_smf_tv,e_kurt_fore_smf_tv)
-      result_residuals_tv_semi = list(residual_snp = con_residuals_tv_semi, 
-                                      residual_moments = residual_moments)
+      
+      result_residuals_tv_semi = con_residuals_tv_semi
       
     }
     
@@ -427,13 +532,14 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
   result_lm_tv = NULL
   result_semi_tv = NULL
   
+
   if(con_residual == T){
     
     result_lm_con = list(beta = beta_i_lm, mm_factor = factor_moments, mm_eps = residual_moments)
     
     if(SemiFL == T){
       
-      result_semi_con = list(beta = beta_np, mm_factor = factor_moments, mm_eps = residual_moments)  
+      result_semi_con = list(beta = beta_np,u = u_np, alpha = alpha_np, mm_factor = factor_moments, mm_eps = residual_moments)  
       
     }
     
@@ -443,7 +549,7 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
     
     if(SemiFL == T){
       
-      result_semi_tv = list(beta = beta_np, mm_factor = factor_moments, mm_eps = residual_moments)
+      result_semi_tv = list(beta = beta_np,u = u_np, alpha = alpha_np, mm_factor = factor_moments, mm_eps = residual_moments)
       
     }
     
@@ -462,7 +568,10 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,sel.bw = "uni",
                                         result_residuals_tv_lm,
                                         result_residuals_lm))
   
-  print("SemiDMFMC completed")
+  cat("        ######################################################################################","\n",
+      "       #################                 SemiDMFMC Completed                #################","\n",
+      "       ######################################################################################","\n",
+      "\n")
   
   return(result)
   

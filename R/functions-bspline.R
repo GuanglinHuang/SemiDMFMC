@@ -304,19 +304,23 @@ alpha_est_inl = function(yy,xx,alpha_inl,mm = 1,kk = 2,eps = 10^-5,itermax = 500
 }
 
 
-coef.bspline = function(yy,xx,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5, Kmax = 15, eps = 10^-4, itermax = 100, num_gp = 500, trim = 0.05,Maxisbest = F,...){
+coef.bspline = function(yy,xx,zz = NULL,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5, Kmax = 15, eps = 10^-4, itermax = 100, trim = 0.05,Maxisbest = F,...){
   
   LnAlpha_inl = function(alpha,vv,yy,xx,K,mm,...){
     
     alpha = rescale(alpha)
+    
     pp = NCOL(yy)
+    dd = NCOL(vv)
+    qq = NCOL(xx)
+    
     ss = vv%*%alpha
     
     bsp = bs_new(ss,K,mm)
     
     ZZ = bsp
     
-    for (ii in 1:dd) {
+    for (ii in 1:qq) {
       ZZ = cbind(ZZ,matrix(xx[,ii],nn,K,byrow = F)*bsp)
     }
     
@@ -340,14 +344,18 @@ coef.bspline = function(yy,xx,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5, Kmax = 15
   LnAlpha = function(alpha,theta,vv,yy,xx,K,mm,...){
     
     alpha = rescale(alpha)
+    
     pp = NCOL(yy)
+    dd = NCOL(vv)
+    qq = NCOL(xx)
+    
     ss = vv%*%alpha
     
     bsp = bs_new(ss,K,mm)
     
     ZZ = bsp
     
-    for (ii in 1:dd) {
+    for (ii in 1:qq) {
       ZZ = cbind(ZZ,matrix(xx[,ii],nn,K,byrow = F)*bsp)
     }
     
@@ -358,23 +366,39 @@ coef.bspline = function(yy,xx,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5, Kmax = 15
   }
   
   nn = NROW(yy)
-  dd = NCOL(xx)
   pp = NCOL(yy)
   
-  vv = matrix(NA,nrow=nn,ncol= dd)
+  if(is.null(zz)){
+  zz = xx  
+  }
+  
+  yy = as.matrix(yy)
+  xx = as.matrix(xx)
+  zz = as.matrix(zz)
+  
+  dd = NCOL(zz)
+  qq = NCOL(xx)
+    
+  vv = matrix(NA,nrow = nn,ncol= dd)
   
   if(dd == 1){
-    for(i in (mm+1):nn){if(mm==1){vv[i,] = xx[(i-1),]}else{vv[i,] = sum(xx[(i-1):(i-mm),])/mm}}
+    for(i in (mm+1):nn){if(mm==1){vv[i,] = zz[(i-1),]}else{vv[i,] = sum(zz[(i-1):(i-mm),])/mm}}
   }else{
-    for(i in (mm+1):nn){if(mm==1){vv[i,] = xx[(i-1),]}else{vv[i,] = colSums(xx[(i-1):(i-mm),])/mm}}}
+    for(i in (mm+1):nn){if(mm==1){vv[i,] = zz[(i-1),]}else{vv[i,] = colSums(zz[(i-1):(i-mm),])/mm}}
+    }
   
   #initialized 
   if(is.null(alpha_inl)){
-    opt_inl = Rsolnp::gosolnp(fun = function(z){LnAlpha_inl(z,vv,yy,xx,K,mm)},LB = c(0,rep(-1,dd-1)),UB = rep(1,dd), n.sim = 500,control = list(trace = 0))
+    opt_inl = Rsolnp::gosolnp(fun = function(z){LnAlpha_inl(z,vv,yy,xx,K,mm)},LB = c(0,rep(-1,dd-1)),UB = rep(1,dd), n.sim = 20000,n.restarts = 5,control = list(trace = 0))
     alpha_inl = rescale(opt_inl$pars) 
     obj_inl =  tail(opt_inl$values,1) 
   }else{
-    obj_inl = 1
+    
+    if(length(alpha_inl) != dd){
+      stop("The dimension of alpha doesn't match Z!")
+    }
+    
+    obj_inl = 99999999
   }
   
   if(is.null(K)){
@@ -382,37 +406,35 @@ coef.bspline = function(yy,xx,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5, Kmax = 15
     bic = vector()
     alpha_tol = list()
     theta_tol = list()
+    
     for (K in Kmin:Kmax){
       
-      alpha_new = alpha_inl 
       alpha = rep(0,dd) 
+      alpha_new =  alpha_inl
       iter = 0
       eps = eps
       obj = vector()
       obj_t = obj_inl+1
       obj_t1 = obj_inl
       
-      while( (obj_t - obj_t1) > eps  ){
-        
+      while( sum(abs(alpha - alpha_new)) > eps && obj_t1 <  obj_t  ){  
         obj_t = obj_t1
-        
         alpha = alpha_new
         
         ss = vv%*%alpha
         
         bsp = bs_new(ss,K,mm)
         
-        theta = rep(1,(dd+1)*K)
+        theta = rep(1,(qq+1)*K)
         
         ZZ = bsp
         
-        for (ii in 1:dd) {
+        for (ii in 1:qq) {
           ZZ = cbind(ZZ,matrix(xx[,ii],nn,K,byrow = F)*bsp)
           
         }
         
         # theta estimation
-        
         invzz = try(MASS::ginv(t(ZZ[-c(1:mm),])%*%(ZZ[-c(1:mm),])),silent = T)
         
         if(class(invzz)[1] == "try-error"){
@@ -422,10 +444,6 @@ coef.bspline = function(yy,xx,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5, Kmax = 15
         theta_est = t(yy[-c(1:mm),])%*%ZZ[-c(1:mm),]%*%invzz
         
         #alpha estimation
-        # t1 = Sys.time()
-        # opt = optim(par = alpha, fn = function(z){LnAlpha(z,theta_est,vv,yy,xx,K,mm)}, method = "L-BFGS-B")
-        # t2 = Sys.time()
-        # t2-t1
         
         opt = Rsolnp::solnp(alpha,fun = function(z){LnAlpha(z,theta_est,vv,yy,xx,K,mm)},control = list(trace = 0))
         
@@ -440,12 +458,12 @@ coef.bspline = function(yy,xx,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5, Kmax = 15
         
         obj[iter] <-  tail(opt$values,1)
         
-        print(paste0("Obj:",round(obj[iter],3),"   ","Difference:",round(abs(obj_t-obj_t1),6)))
+        cat(paste0("########  ","K= ",K,"  ####  Obj:",sprintf("%0.3f",obj[iter]),"  ####  ","Alpha Diff:",sprintf("%0.4f",sum(abs(alpha - alpha_new))),"  ####  Iteration:", iter,"  ########"),"\n") 
+        
         
         if(iter > itermax){
           break
         }
-        
       }
       
       theta_tol[[K-Kmin+1]] <- theta_est
@@ -480,21 +498,20 @@ coef.bspline = function(yy,xx,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5, Kmax = 15
     obj_t = obj_inl+1
     obj_t1 = obj_inl
     
-    while( (obj_t - obj_t1) > eps  ){
+    while( sum(abs(alpha - alpha_new)) > eps & obj_t1 <  obj_t ){ #
       
       obj_t = obj_t1
-      
       alpha = alpha_new
       
       ss = vv%*%alpha
       
       bsp = bs_new(ss,K,mm)
       
-      theta = rep(1,(dd+1)*K)
+      theta = rep(1,(qq+1)*K)
       
       ZZ = bsp
       
-      for (ii in 1:dd) {
+      for (ii in 1:qq) {
         ZZ = cbind(ZZ,matrix(xx[,ii],nn,K,byrow = F)*bsp)
         
       }
@@ -510,10 +527,6 @@ coef.bspline = function(yy,xx,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5, Kmax = 15
       theta_est = t(yy[-c(1:mm),])%*%ZZ[-c(1:mm),]%*%invzz
       
       #alpha estimation
-      # t1 = Sys.time()
-      # opt = optim(par = alpha, fn = function(z){LnAlpha(z,theta_est,vv,yy,xx,K,mm)}, method = "L-BFGS-B")
-      # t2 = Sys.time()
-      # t2-t1
       
       opt = Rsolnp::solnp(alpha,fun = function(z){LnAlpha(z,theta_est,vv,yy,xx,K,mm)},control = list(trace = 0))
       
@@ -528,7 +541,7 @@ coef.bspline = function(yy,xx,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5, Kmax = 15
       
       obj[iter] <-  tail(opt$values,1)
       
-      print(paste0("Obj:",round(obj[iter],3),"   ","Difference:",round(abs(obj_t-obj_t1),6)))
+      cat(paste0("########  ","Obj:",sprintf("%0.3f",obj[iter]),"  ####  ","Alpha Diff:",sprintf("%0.4f",sum(abs(alpha - alpha_new))),"  ####  Iteration:", iter,"  ########"),"\n") 
       
       if(iter > itermax){
         break
@@ -552,10 +565,10 @@ coef.bspline = function(yy,xx,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5, Kmax = 15
   if(mm > 1){
     vvv = matrix(NA,nrow = nn,ncol = dd)
     for(i in mm:nn){
-      vvv[i,] = colSums(xx[(i):(i-mm+1),])/mm
+      vvv[i,] = colSums(zz[(i):(i-mm+1),])/mm
     }
   }else{
-    vvv = xx
+    vvv = zz
   }
   
   ss_fore = vvv%*%alpha_hat
@@ -564,9 +577,7 @@ coef.bspline = function(yy,xx,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5, Kmax = 15
   
   
   ss_fit = na.omit(ss_fit) ######### na omit !!!!!!!!!!!!!!
-  
-  # zz = calc_grid_points(na.omit(vv),alpha_hat,num_gp = num_gp) #(not good) first, give a grid net; second, delete tail value; third, use interpolate give the fit beta and mu
-  
+ 
   ss_down = quantile(ss_fit,trim) 
   ss_up   = quantile(ss_fit,1-trim)
   
@@ -575,14 +586,7 @@ coef.bspline = function(yy,xx,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5, Kmax = 15
   bsp = bs_new(ss_fit,K,mm)
   
   mu_range = bsp[ss_range,]%*%t(theta_hat[,1:K])
-  
-  
-  # bsp = bs_new(zz,K,mm)
-  # 
-  # zz_range = seq(from = round(num_gp*trim),to = (num_gp*(1-trim)))
-  # 
-  # mu_range = bsp[zz_range,]%*%t(theta_est[,1:K])
-  
+
   mu_fit = matrix(NA,nn,pp)
   mu_fore = vector()
   
@@ -595,11 +599,11 @@ coef.bspline = function(yy,xx,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5, Kmax = 15
   
   ##### beta fit
   
-  beta_fit = array(NA,dim = c(nn,pp,dd))
+  beta_fit = array(NA,dim = c(nn,pp,qq))
   
-  beta_fore = matrix(NA,pp,dd)
+  beta_fore = matrix(NA,pp,qq)
   
-  for (jj in 1:dd) {
+  for (jj in 1:qq) {
     beta_range = bsp[ss_range,]%*%t(theta_hat[,(jj*K+1):((jj+1)*K)])
     
     for (ii in 1:pp){
@@ -645,11 +649,21 @@ coef.bspline = function(yy,xx,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5, Kmax = 15
 
 
 
-beta.bspline = function(yy,xx,alpha,mm = 1,K = NULL,Kmin = 8, Kmax = 15, num_gp = 500, trim = 0.05,Maxisbest = F,...){
+beta.bspline = function(yy,xx,zz = NULL,alpha,mm = 1,K = 10,Kmin = 5, Kmax = 15, trim = 0.05,Maxisbest = F,...){
   
   nn = NROW(yy)
-  dd = NCOL(xx)
+  qq = NCOL(xx)
   pp = NCOL(yy)
+  
+  if(is.null(zz)){
+    zz = xx
+  }
+  
+  yy = as.matrix(yy)
+  xx = as.matrix(xx)
+  zz = as.matrix(zz)
+  
+  dd = NCOL(zz)
   
   vv = matrix(NA,nrow=nn,ncol= dd)
   
@@ -669,11 +683,11 @@ beta.bspline = function(yy,xx,alpha,mm = 1,K = NULL,Kmin = 8, Kmax = 15, num_gp 
       
       bsp = bs_new(ss,K,mm)
       
-      theta = rep(1,(dd+1)*K)
+      theta = rep(1,(qq+1)*K)
       
       ZZ = bsp
       
-      for (ii in 1:dd) {
+      for (ii in 1:qq) {
         ZZ = cbind(ZZ,matrix(xx[,ii],nn,K,byrow = F)*bsp)
         
       }
@@ -712,11 +726,11 @@ beta.bspline = function(yy,xx,alpha,mm = 1,K = NULL,Kmin = 8, Kmax = 15, num_gp 
     
     bsp = bs_new(ss,K,mm)
     
-    theta = rep(1,(dd+1)*K)
+    theta = rep(1,(qq+1)*K)
     
     ZZ = bsp
     
-    for (ii in 1:dd) {
+    for (ii in 1:qq) {
       ZZ = cbind(ZZ,matrix(xx[,ii],nn,K,byrow = F)*bsp)
       
     }
@@ -746,10 +760,10 @@ beta.bspline = function(yy,xx,alpha,mm = 1,K = NULL,Kmin = 8, Kmax = 15, num_gp 
   if(mm > 1){
     vvv = matrix(NA,nrow = nn,ncol = dd)
     for(i in mm:nn){
-      vvv[i,] = colSums(xx[(i):(i-mm+1),])/mm
+      vvv[i,] = colSums(zz[(i):(i-mm+1),])/mm
     }
   }else{
-    vvv = xx
+    vvv = zz
   }
   
   ss_fore = vvv%*%alpha
@@ -758,9 +772,7 @@ beta.bspline = function(yy,xx,alpha,mm = 1,K = NULL,Kmin = 8, Kmax = 15, num_gp 
   
   
   ss_fit = na.omit(ss_fit) ######### na omit !!!!!!!!!!!!!!
-  
-  # zz = calc_grid_points(na.omit(vv),alpha_hat,num_gp = num_gp) #(not good) first, give a grid net; second, delete tail value; third, use interpolate give the fit beta and mu
-  
+
   ss_down = quantile(ss_fit,trim) 
   ss_up   = quantile(ss_fit,1-trim)
   
@@ -769,13 +781,6 @@ beta.bspline = function(yy,xx,alpha,mm = 1,K = NULL,Kmin = 8, Kmax = 15, num_gp 
   bsp = bs_new(ss_fit,K,mm)
   
   mu_range = bsp[ss_range,]%*%t(theta_hat[,1:K])
-  
-  
-  # bsp = bs_new(zz,K,mm)
-  # 
-  # zz_range = seq(from = round(num_gp*trim),to = (num_gp*(1-trim)))
-  # 
-  # mu_range = bsp[zz_range,]%*%t(theta_est[,1:K])
   
   mu_fit = matrix(NA,nn,pp)
   mu_fore = vector()
@@ -789,11 +794,11 @@ beta.bspline = function(yy,xx,alpha,mm = 1,K = NULL,Kmin = 8, Kmax = 15, num_gp 
   
   ##### beta fit
   
-  beta_fit = array(NA,dim = c(nn,pp,dd))
+  beta_fit = array(NA,dim = c(nn,pp,qq))
   
-  beta_fore = matrix(NA,pp,dd)
+  beta_fore = matrix(NA,pp,qq)
   
-  for (jj in 1:dd) {
+  for (jj in 1:qq) {
     beta_range = bsp[ss_range,]%*%t(theta_hat[,(jj*K+1):((jj+1)*K)])
     
     for (ii in 1:pp){
@@ -834,6 +839,5 @@ beta.bspline = function(yy,xx,alpha,mm = 1,K = NULL,Kmin = 8, Kmax = 15, num_gp 
   
   
 }
-
 
 

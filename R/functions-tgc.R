@@ -568,36 +568,20 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
   
   if(CTGC == T){
     #$constant theta estimation$
-    llc_tol = vector()
-    conc_tol = list()
-    theta_est_tol = list()
-    for (bn in 1:rep_sim) {
+
       theta_con_inl = runif(2,-1,1)
-      constant_est = try(optim(par = theta_con_inl, function(theta){
+
+      constant_est = Rsolnp::gosolnp(theta_con_inl,fun = function(theta){
         con = likelihood_tgc_con(z,theta)
         return(-con[[1]])
-      },hessian = T),silent = T)
-      if(class(constant_est) == "try-error"){
-        theta_est = theta_con_inl
-        llc_tol[bn] <- -9999
-        conc_tol[[bn]] <- NA
-        theta_est_tol[[bn]] = NA
-      }else{
-        theta_est = constant_est$par
-        llc_tol[bn] <- likelihood_tgc_con(z,theta_est)$Lnf
-        conc_tol[[bn]] <- constant_est
-        theta_est_tol[[bn]] = theta_est
-      }
-    }
-    pl = which(llc_tol == max(llc_tol))[1]
-    constant_est = conc_tol[[pl]]
-    theta_est = theta_est_tol[[pl]]
-    
+      },LB = rep(-2,2),UB = rep(2,2), n.sim = 5000,n.restarts = rep_sim, control = list(trace = 0))
+  
+      
     std = sqrt(diag(MASS::ginv(constant_est$hessian)))
-    t_stat = constant_est$par/std
+    t_stat = constant_est$pars/std
     p_value = 2*(1 - pnorm(abs(t_stat)))
     
-    constant_con = cbind(theta_est,std,t_stat,p_value) #constant parameters estimation #return
+    constant_con = cbind(constant_est$pars,std,t_stat,p_value) #constant parameters estimation #return
     row.names(constant_con) <- c("theta1","theta2")
     theta_est = constant_con[,1] #return
     
@@ -606,118 +590,212 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
     
     result_moment = tgc_predict(fit_variance,ff,theta_tv_inl,type = type)
     
-    result_con = list(
-      snp.cof = theta_est, constant_con = constant_con, result_moment = list(mm.fore = result_moment)
-    )
-    
-    return(result_con)
-  }else{
-    #$constant theta estimation$
-    theta_con_inl = runif(2,-1,1)
-    
-    constant_est = optim(par = theta_con_inl, function(theta){
-      con = likelihood_tgc_con(z,theta)
-      return(-con[[1]])
-    },hessian = T)
-    
-    theta_est = constant_est$par
-    std = sqrt(diag(MASS::ginv(constant_est$hessian)))
-    t_stat = constant_est$par/std
-    p_value = 2*(1 - pnorm(abs(t_stat)))
-    
-    constant_con = cbind(theta_est,std,t_stat,p_value) #constant parameters estimation #return
-    row.names(constant_con) <- c("theta1","theta2")
-    theta_est = constant_con[,1] #return
-    
-    #moment forecasting - CSNP
-    theta_tv_inl_con = c(theta_est[1],rep(0,4),theta_est[2],rep(0,4))
-    
-    result_moment = tgc_predict(fit_variance,ff,theta_tv_inl_con,type = type)
-    
-    #likelihood 
     Lnf_con = likelihood_tgc_con(z,theta_est)$Lnf
     
     result_con = list(
-      snp.cof = theta_est, constant_con = constant_con,moment_fore = result_moment,
+      snp.cof = theta_est, constant_con = constant_con, result_moment = list(mm.fore = result_moment),
+      Lnf_con = Lnf_con
+    )
+    
+    return(result_con)
+  }
+  
+  if(CTGC == F){
+    
+    theta_con_inl = runif(2,-1,1)
+    
+    constant_est = Rsolnp::solnp(theta_con_inl,fun = function(theta){
+      con = likelihood_tgc_con(z,theta)
+      return(-con[[1]])
+    },LB = rep(-1,2),UB = rep(1,2), control = list(trace = 0))
+    
+    
+    std = sqrt(diag(MASS::ginv(constant_est$hessian)))
+    t_stat = constant_est$pars/std
+    p_value = 2*(1 - pnorm(abs(t_stat)))
+    
+    constant_con = cbind(constant_est$pars,std,t_stat,p_value) #constant parameters estimation #return
+    row.names(constant_con) <- c("theta1","theta2")
+    theta_est = constant_con[,1] #return
+    
+    #moment forecasting
+    theta_tv_inl = c(theta_est[1],rep(0,4),theta_est[2],rep(0,4))
+    
+    theta_tv_inl_con = theta_tv_inl
+    
+    result_moment = tgc_predict(fit_variance,ff,theta_tv_inl,type = type)
+    
+    Lnf_con = likelihood_tgc_con(z,theta_est)$Lnf
+    
+    result_con = list(
+      snp.cof = theta_est, constant_con = constant_con, result_moment = list(mm.fore = result_moment),
       Lnf_con = Lnf_con
     )
     
     #$time varying theta estimation$
     if(!tgc.targeting){
-      ll_tol = vector()
-      con_tol = list()
-      theta_est_tol = list()
-      for (bn in 1:rep_sim) {
-        ar1_inl = sample(c(runif(1,0.3,0.8),runif(1,-0.8,-0.3)),1)
-        ar2_inl = sample(c(runif(1,0.3,0.8),runif(1,-0.8,-0.3)),1)
-        theta_tv_inl = c(0,ar1_inl,rep(0,2),0,0,ar2_inl,rep(0,2),0)
-        con_tv = try(optim(par = theta_tv_inl, 
-                           function(sss){theta_tv = sss[c(2:5,7:10)];
-                           theta0 = c(sss[1],sss[6]);
-                           con = likelihood_tgc_tv_rcpp(z,theta_tv,theta0,type = type); 
-                           return(-con)}, method = "L-BFGS-B", hessian = T),silent = T)
-        
-        if(class(con_tv) == "try-error"){
-          theta_est = theta_tv_inl_con
-          ll_tol[bn] <- likelihood_tgc_tv_rcpp(z,theta_est[-c(1,6)],theta_est[c(1,6)],type = type)
-          con_tol[[bn]] <- list()
-          theta_est_tol[[bn]] <- theta_est
-        }else{
-          theta_est = con_tv$par
-          ll_tol[bn] <- likelihood_tgc_tv_rcpp(z,theta_est[-c(1,6)],theta_est[c(1,6)],type = type)
-          con_tol[[bn]] <- con_tv
-          theta_est_tol[[bn]] = theta_est
-        }
-      }
-      pl = which(ll_tol == max(ll_tol))[1]
-      con_tv = con_tol[[pl]]
-      theta_est = theta_est_tol[[pl]]
-      
-      rep_con = list(ll_tol = ll_tol, con_tol= con_tol, theta_est_tol = theta_est_tol)
-      
-      theta_tv_est = theta_est #return
       
       if(tgc.type == "linear"){
-        theta_tv_est[5] <- 0
-        theta_tv_est[4] <- theta_tv_est[3]
-        theta_tv_est[10] <- 0
-        theta_tv_est[9] <- theta_tv_est[8]
-      }
-      if(tgc.type == "leverage"){
-        theta_tv_est[5] <- 0
-        theta_tv_est[10] <- 0
-      }
-      
-      if(is.null(con_tv$par)){
-        tv_con = NA
-      }else{
+        ar1_inl = runif(1,0.5,0.9)
+        ar2_inl = runif(1,0.5,0.9)
+        theta_tv_inl = c(0,ar1_inl,0,0,0,ar2_inl,0,0)
+        
+        LB = rep(-1,8)
+        UB = rep(1,8)
+        
+        con_tv = Rsolnp::gosolnp(pars = theta_tv_inl,fixed = c(4,8),function(sss){
+          theta_tv = sss[c(2,3,3,4,6,7,7,8)];
+          theta0   = c(sss[1],sss[5]);
+          con      = likelihood_tgc_tv_rcpp(z,theta_tv,theta0,type = "linear"); 
+          return(-con)},LB = LB, UB = UB,n.sim = 20000,n.restarts = rep_sim, control = list(trace = 0))
+        
         std_tv = solve_hess(con_tv$hessian)
-        t_stat_tv = con_tv$par/std_tv
+        t_stat_tv = con_tv$pars/std_tv
         p_value_tv = 2*(1-pnorm(abs(t_stat_tv)))
-        tv_con = cbind(theta_tv_est,std_tv,t_stat_tv,p_value_tv)#tv parameters estimation
-        row.names(tv_con)<-c("omega1","alpha1","beta11","beta12","gamma1","omega2","alpha2","beta21","beta22","gamma2")
-      } 
+        tv_con = cbind(con_tv$pars,std_tv,t_stat_tv,p_value_tv)#tv parameters estimation
+        row.names(tv_con)<-c("omega1","alpha1","beta1","gamma1","omega2","alpha2","beta2","gamma2")
+        
+        theta_tv_est = con_tv$pars[c(1,2,3,3,4,5,6,6,7,8)]
+      }
       
+      if(tgc.type == "leverage"){
+        
+        ar1_inl = runif(1,0.5,0.9)
+        ar2_inl = runif(1,0.5,0.9)
+        theta_tv_inl = c(0,ar1_inl,0,0,0,0,ar2_inl,0,0,0)
+        
+        LB = c(-0.5,-1,-1,-1,-0.3,-0.5,-1,-1,-1,-0.3)
+        UB = c(0.5,1,1,1,0.3,0.5,1,1,1,0.3)
+        
+        con_tv = Rsolnp::gosolnp(pars = theta_tv_inl,fixed = c(5,10),function(sss){
+          theta_tv = sss[-c(1,6)];
+          theta0   = c(sss[1],sss[6]);
+          con      = likelihood_tgc_tv_rcpp(z,theta_tv,theta0,type = "leverage"); 
+          return(-con)},LB = LB, UB = UB,n.sim = 20000,n.restarts = rep_sim, control = list(trace = 0))
+        
+        std_tv = solve_hess(con_tv$hessian)
+        t_stat_tv = con_tv$pars/std_tv
+        p_value_tv = 2*(1-pnorm(abs(t_stat_tv)))
+        tv_con = cbind(con_tv$pars,std_tv,t_stat_tv,p_value_tv)#tv parameters estimation
+        row.names(tv_con)<-c("omega1","alpha1","beta11","beta12","gamma1","omega2","alpha2","beta21","beta22","gamma2")
+        
+        theta_tv_est = con_tv$pars
+      }
+      
+      if(tgc.type == "n-leverage"){
+        ar1_inl = runif(1,0.5,0.8)
+        ar2_inl = runif(1,0.5,0.8)
+        theta_tv_inl = c(0,ar1_inl,0,0,0,0,ar2_inl,0,0,0)
+        
+        LB = c(-0.5,-1,-1,-1,-0.3,-0.5,-1,-1,-1,-0.3)
+        UB = c(0.5,1,1,1,0.3,0.5,1,1,1,0.3)
+        
+        con_tv = Rsolnp::gosolnp(pars = theta_tv_inl,function(sss){
+          theta_tv = sss[-c(1,6)];
+          theta0   = c(sss[1],sss[6]);
+          con      = likelihood_tgc_tv_rcpp(z,theta_tv,theta0,type = "n-leverage"); 
+          return(-con)},LB = LB, UB = UB,n.sim = 20000,n.restarts = rep_sim,control = list(trace = 0))
+        
+        std_tv = solve_hess(con_tv$hessian)
+        t_stat_tv = con_tv$pars/std_tv
+        p_value_tv = 2*(1-pnorm(abs(t_stat_tv)))
+        tv_con = cbind(con_tv$pars,std_tv,t_stat_tv,p_value_tv)#tv parameters estimation
+        row.names(tv_con)<-c("omega1","alpha1","beta11","beta12","gamma1","omega2","alpha2","beta21","beta22","gamma2")
+        
+        theta_tv_est = con_tv$pars
+      }
+ 
     }
     
     # targeting estimation
     if(tgc.targeting){
-      con_tv_tar = optim(par = theta_tv_inl_con, function(theta_tv){con = likelihood_tgc_tv_targeting_rcpp(z,theta_tv,theta0 = theta_est,type = type);return(-con)}, method = "BFGS", hessian = T)
-      theta_tv_est_tar = con_tv_tar$par
-      std_tv_tar = solve_hess(con_tv_tar$hessian)
-      t_stat_tv_tar = con_tv_tar$par/std_tv_tar
-      p_value_tv_tar = 2*(1-pnorm(abs(t_stat_tv_tar)))
-      tv_con_tar = cbind(theta_tv_est_tar,std_tv_tar,t_stat_tv_tar,p_value_tv_tar)#tv parameters estimation
-      tv_con = rbind(constant_con[1,],tv_con_tar[1:4,],constant_con[2,],tv_con_tar[5:8,]) #return
-      row.names(tv_con_tar)<-c("theta1","alpha1","beta11","beta12","gamma1","theta2","alpha2","beta21","beta22","gamma2")
+      if(tgc.type == "linear"){
+        ar1_inl = runif(1,0.5,0.8)
+        ar2_inl = runif(1,0.5,0.8)
+        
+        theta_tv_inl = c(theta_tv_inl_con[1],ar1_inl,0,0,theta_tv_inl_con[6],ar2_inl,0,0)
+        
+        LB = c(-0.5,-1,-1,-1,-0.3,-0.5,-1,-1,-1,-0.3)
+        UB = c(0.5,1,1,1,0.3,0.5,1,1,1,0.3)
+        
+        con_tv = Rsolnp::gosolnp(pars = theta_tv_inl,fixed = c(1,4,5,8),function(sss){
+          theta_tv = sss[c(2,3,3,4,6,7,7,8)];
+          theta0   = c(theta_tv_inl_con[1],theta_tv_inl_con[6]);
+          con      = likelihood_tgc_tv_targeting_rcpp(z,theta_tv,theta0,type = "linear"); 
+          return(-con)},LB = LB, UB = UB,n.sim = 20000,n.restarts = rep_sim,control = list(trace = 0))
+        
+        std_tv = solve_hess(con_tv$hessian)
+        t_stat_tv = con_tv$pars/std_tv
+        p_value_tv = 2*(1-pnorm(abs(t_stat_tv)))
+        tv_con = cbind(con_tv$pars,std_tv,t_stat_tv,p_value_tv)#tv parameters estimation
+        tv_con[1,] = constant_con[1,]
+        tv_con[5,] = constant_con[2,]
+        row.names(tv_con) <- c("theta1","alpha1","beta1","gamma1","theta2","alpha2","beta2","gamma2")
+        
+        theta_tv_est = con_tv$pars[c(1,2,3,3,4,5,6,6,7,8)]
+        names(theta_tv_est) = c("theta1","alpha1","beta11","beta12","gamma1","theta2","alpha2","beta21","beta22","gamma2")
+        
+      }
       
-      theta_tv_est = c(theta_tv_inl_con[1],theta_tv_est_tar[1:4],theta_tv_inl_con[6],theta_tv_est_tar[5:8]) #return
-    }
+      if(tgc.type == "leverage"){
+        ar1_inl = runif(1,0.5,0.8)
+        ar2_inl = runif(1,0.5,0.8)
+        theta_tv_inl = c(theta_tv_inl_con[1],ar1_inl,0,0,0,theta_tv_inl_con[6],ar2_inl,0,0,0)
+        
+        LB = c(-0.5,-1,-1,-1,-0.3,-0.5,-1,-1,-1,-0.3)
+        UB = c(0.5,1,1,1,0.3,0.5,1,1,1,0.3)
+        
+        con_tv = Rsolnp::gosolnp(pars = theta_tv_inl,fixed = c(1,5,6,10),function(sss){
+          theta_tv = sss[-c(1,6)];
+          theta0   = c(theta_tv_inl_con[1],theta_tv_inl_con[6]);
+          con      = likelihood_tgc_tv_rcpp(z,theta_tv,theta0,type = "leverage"); 
+          return(-con)},LB = LB, UB = UB,n.sim = 20000,n.restarts = rep_sim,control = list(trace = 0))
+        
+        std_tv = solve_hess(con_tv$hessian)
+        t_stat_tv = con_tv$pars/std_tv
+        p_value_tv = 2*(1-pnorm(abs(t_stat_tv)))
+        tv_con = cbind(con_tv$pars,std_tv,t_stat_tv,p_value_tv)#tv parameters estimation
+        tv_con[1,] = constant_con[1,]
+        tv_con[6,] = constant_con[2,]
+        row.names(tv_con)<-c("theta1","alpha1","beta11","beta12","gamma1","theta2","alpha2","beta21","beta22","gamma2")
+        
+        theta_tv_est = con_tv$pars
+        names(theta_tv_est) = c("theta1","alpha1","beta11","beta12","gamma1","theta2","alpha2","beta21","beta22","gamma2")
+        
+      }
+      
+      if(tgc.type == "n-leverage"){
+        ar1_inl = runif(1,0.5,0.8)
+        ar2_inl = runif(1,0.5,0.8)
+        theta_tv_inl = c(0,ar1_inl,0,0,0,0,ar2_inl,0,0,0)
+        
+        LB = c(-0.5,-1,-1,-1,-0.3,-0.5,-1,-1,-1,-0.3)
+        UB = c(0.5,1,1,1,0.3,0.5,1,1,1,0.3)
+        
+        con_tv = Rsolnp::gosolnp(pars = theta_tv_inl,fixed = c(1,6),function(sss){
+          theta_tv = sss[-c(1,6)];
+          theta0   = c(theta_tv_inl_con[1],theta_tv_inl_con[6]);
+          con      = likelihood_tgc_tv_rcpp(z,theta_tv,theta0,type = "n-leverage"); 
+          return(-con)},LB = LB, UB = UB,n.sim = 20000,n.restarts = rep_sim,control = list(trace = 0))
+        
+        std_tv = solve_hess(con_tv$hessian)
+        t_stat_tv = con_tv$pars/std_tv
+        p_value_tv = 2*(1-pnorm(abs(t_stat_tv)))
+        tv_con = cbind(con_tv$pars,std_tv,t_stat_tv,p_value_tv)#tv parameters estimation
+        tv_con[1,] = constant_con[1,]
+        tv_con[6,] = constant_con[2,]
+        row.names(tv_con)<-c("theta1","alpha1","beta11","beta12","gamma1","theta2","alpha2","beta21","beta22","gamma2")
+        
+        theta_tv_est = con_tv$pars
+        names(theta_tv_est) = c("theta1","alpha1","beta11","beta12","gamma1","theta2","alpha2","beta21","beta22","gamma2")
+        
+      }    
+}
     
     
     result_tv = list(
-      tgc.cof = theta_tv_est, tv_con = tv_con, rep_con = rep_con
-    )
+      tgc.cof = theta_tv_est, tv_con = tv_con
+      )
     
     #$moment forecasting$
     mm_fit = tgc_fit_moment(z,theta_tv_est) #return
@@ -734,6 +812,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
       mm.fit = mm_fit,
       mm.fore = mm_fore
     )
+    
     return(list(result_con = result_con,
                 result_tv = result_tv,
                 result_moment = result_moment,
@@ -745,7 +824,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
 }
 
 MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 'sged', VAR = T,Corr.Struture = c("ica","dcc","copula"), dcc.model = "DCC", 
-                     copula.model = list(copula = "mvt", method = "ML", time.varying = FALSE, transformation = "spd"),
+                     copula.model = list(copula = "mvt", method = "ML", time.varying = T, transformation = "spd"),
                      tgc.type  = "leverage",tgc.targeting = F,mean.model = list(armaOrder = c(0, 0)),CTGC = FALSE,rep_sim = 10){
   
   result_factors_ica = NULL
@@ -778,13 +857,11 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
                                                            variance.targeting = var.targeting), distribution.model = "manig", 
                                      ica = "fastica", ica.fix = list(A = NULL, K = NULL))  
     }
-    
-    
-    
-    fit_gogarch = rmgarch::gogarchfit(gogarch,ff,out.sample = 0, gfun = "tanh")
+
+    fit_gogarch = rmgarch::gogarchfit(gogarch,ff,out.sample = 0, solver = "solnp", gfun = "tanh")
     
     fore_gogarch = rmgarch::gogarchforecast(fit_gogarch,n.ahead = 1)
-  
+
     ica_B = fit_gogarch@mfit$A
 
     lf = fit_gogarch@mfit$residuals%*%t(solve(ica_B))
@@ -800,7 +877,9 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     con_factor <- list()
     
     for (gg in 1:q) {
-      lf_snp = TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,CTGC = F,rep_sim = rep_sim)
+      lf_snp = TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,CTGC = CTGC,tgc.targeting = tgc.targeting,rep_sim = rep_sim)
+      lf_snp$Lnf_tv
+      lf_snp$result_con$Lnf_con
       
       con_factor[[gg]] <- lf_snp
       
@@ -861,7 +940,7 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     con_factor <- list()
     
     for (gg in 1:NCOL(ff)) {
-      lf_snp = SemiDMFMC::TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,CTGC = F,rep_sim = rep_sim)
+      lf_snp = TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,tgc.targeting = tgc.targeting,CTGC = CTGC,rep_sim = rep_sim)
       
       con_factor[[gg]] <- lf_snp
       
@@ -930,7 +1009,7 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     con_factor <- list()
     
     for (gg in 1:NCOL(ff)) {
-      lf_snp = SemiDMFMC::TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,CTGC = F,rep_sim = rep_sim)
+      lf_snp = TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,CTGC = CTGC,tgc.targeting = tgc.targeting,rep_sim = rep_sim)
       
       con_factor[[gg]] <- lf_snp
       
