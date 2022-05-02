@@ -548,7 +548,8 @@ TVSNP.test = function(z,result_tv,result_con,type = "leverage"){
 }
 
 TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 'sged',
-                   tgc.type  = "leverage",tgc.targeting = F, mean.model = list(armaOrder = c(1,1)),CTGC = FALSE,rep_sim = 10){
+                   tgc.type  = "leverage",tgc.targeting = F, mean.model = list(armaOrder = c(1,1)),
+                   CTGC = FALSE,rep_sim = 10,n.sim = 1000){
   
   type  = tgc.type
   
@@ -574,7 +575,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
       constant_est = Rsolnp::gosolnp(theta_con_inl,fun = function(theta){
         con = likelihood_tgc_con(z,theta)
         return(-con[[1]])
-      },LB = rep(-2,2),UB = rep(2,2), n.sim = 5000,n.restarts = rep_sim, control = list(trace = 0))
+      },LB = rep(-2,2),UB = rep(2,2), n.sim = n.sim,n.restarts = rep_sim, control = list(trace = 0))
   
       
     std = sqrt(diag(MASS::ginv(constant_est$hessian)))
@@ -647,7 +648,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
           theta_tv = sss[c(2,3,3,4,6,7,7,8)];
           theta0   = c(sss[1],sss[5]);
           con      = likelihood_tgc_tv_rcpp(z,theta_tv,theta0,type = "linear"); 
-          return(-con)},LB = LB, UB = UB,n.sim = 20000,n.restarts = rep_sim, control = list(trace = 0))
+          return(-con)},LB = LB, UB = UB,n.sim = n.sim,n.restarts = rep_sim, control = list(trace = 0))
         
         std_tv = solve_hess(con_tv$hessian)
         t_stat_tv = con_tv$pars/std_tv
@@ -671,7 +672,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
           theta_tv = sss[-c(1,6)];
           theta0   = c(sss[1],sss[6]);
           con      = likelihood_tgc_tv_rcpp(z,theta_tv,theta0,type = "leverage"); 
-          return(-con)},LB = LB, UB = UB,n.sim = 20000,n.restarts = rep_sim, control = list(trace = 0))
+          return(-con)},LB = LB, UB = UB,n.sim = n.sim,n.restarts = rep_sim, control = list(trace = 0))
         
         std_tv = solve_hess(con_tv$hessian)
         t_stat_tv = con_tv$pars/std_tv
@@ -694,7 +695,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
           theta_tv = sss[-c(1,6)];
           theta0   = c(sss[1],sss[6]);
           con      = likelihood_tgc_tv_rcpp(z,theta_tv,theta0,type = "n-leverage"); 
-          return(-con)},LB = LB, UB = UB,n.sim = 20000,n.restarts = rep_sim,control = list(trace = 0))
+          return(-con)},LB = LB, UB = UB,n.sim = n.sim,n.restarts = rep_sim,control = list(trace = 0))
         
         std_tv = solve_hess(con_tv$hessian)
         t_stat_tv = con_tv$pars/std_tv
@@ -722,7 +723,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
           theta_tv = sss[c(2,3,3,4,6,7,7,8)];
           theta0   = c(theta_tv_inl_con[1],theta_tv_inl_con[6]);
           con      = likelihood_tgc_tv_targeting_rcpp(z,theta_tv,theta0,type = "linear"); 
-          return(-con)},LB = LB, UB = UB,n.sim = 20000,n.restarts = rep_sim,control = list(trace = 0))
+          return(-con)},LB = LB, UB = UB,n.sim = n.sim,n.restarts = rep_sim,control = list(trace = 0))
         
         std_tv = solve_hess(con_tv$hessian)
         t_stat_tv = con_tv$pars/std_tv
@@ -749,7 +750,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
           theta_tv = sss[-c(1,6)];
           theta0   = c(theta_tv_inl_con[1],theta_tv_inl_con[6]);
           con      = likelihood_tgc_tv_rcpp(z,theta_tv,theta0,type = "leverage"); 
-          return(-con)},LB = LB, UB = UB,n.sim = 20000,n.restarts = rep_sim,control = list(trace = 0))
+          return(-con)},LB = LB, UB = UB,n.sim = n.sim,n.restarts = rep_sim,control = list(trace = 0))
         
         std_tv = solve_hess(con_tv$hessian)
         t_stat_tv = con_tv$pars/std_tv
@@ -776,7 +777,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
           theta_tv = sss[-c(1,6)];
           theta0   = c(theta_tv_inl_con[1],theta_tv_inl_con[6]);
           con      = likelihood_tgc_tv_rcpp(z,theta_tv,theta0,type = "n-leverage"); 
-          return(-con)},LB = LB, UB = UB,n.sim = 20000,n.restarts = rep_sim,control = list(trace = 0))
+          return(-con)},LB = LB, UB = UB,n.sim = n.sim,n.restarts = rep_sim,control = list(trace = 0))
         
         std_tv = solve_hess(con_tv$hessian)
         t_stat_tv = con_tv$pars/std_tv
@@ -825,7 +826,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
 
 MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 'sged', VAR = T,Corr.Struture = c("ica","dcc","copula"), dcc.model = "DCC", 
                      copula.model = list(copula = "mvt", method = "ML", time.varying = T, transformation = "spd"),
-                     tgc.type  = "leverage",tgc.targeting = F,mean.model = list(armaOrder = c(0, 0)),CTGC = FALSE,rep_sim = 10){
+                     tgc.type  = "leverage",tgc.targeting = F,mean.model = list(armaOrder = c(0, 0)),CTGC = FALSE,rep_sim = 10,n.sim = 1000){
   
   result_factors_ica = NULL
   result_factors_dcc = NULL
@@ -877,7 +878,8 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     con_factor <- list()
     
     for (gg in 1:q) {
-      lf_snp = TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,CTGC = CTGC,tgc.targeting = tgc.targeting,rep_sim = rep_sim)
+      lf_snp = TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,
+                       CTGC = CTGC,tgc.targeting = tgc.targeting,rep_sim = rep_sim,n.sim = n.sim)
       lf_snp$Lnf_tv
       lf_snp$result_con$Lnf_con
       
@@ -940,7 +942,8 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     con_factor <- list()
     
     for (gg in 1:NCOL(ff)) {
-      lf_snp = TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,tgc.targeting = tgc.targeting,CTGC = CTGC,rep_sim = rep_sim)
+      lf_snp = TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,
+                       tgc.targeting = tgc.targeting,CTGC = CTGC,rep_sim = rep_sim,n.sim = n.sim)
       
       con_factor[[gg]] <- lf_snp
       
@@ -1009,7 +1012,8 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     con_factor <- list()
     
     for (gg in 1:NCOL(ff)) {
-      lf_snp = TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,CTGC = CTGC,tgc.targeting = tgc.targeting,rep_sim = rep_sim)
+      lf_snp = TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,
+                       CTGC = CTGC,tgc.targeting = tgc.targeting,rep_sim = rep_sim,n.sim = n.sim)
       
       con_factor[[gg]] <- lf_snp
       

@@ -304,7 +304,8 @@ alpha_est_inl = function(yy,xx,alpha_inl,mm = 1,kk = 2,eps = 10^-5,itermax = 500
 }
 
 
-coef.bspline = function(yy,xx,zz = NULL,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5, Kmax = 15, eps = 10^-4, itermax = 100, trim = 0.05,Maxisbest = F,...){
+coef.bspline = function(yy,xx,zz = NULL,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5, Kmax = 15, eps = 10^-4, itermax = 500, trim = 0.05,
+                        Maxisbest = F,n.sim = 100,n.restarts = 10,LB = 0,UB = 1,trace = 1,...){
   
   LnAlpha_inl = function(alpha,vv,yy,xx,K,mm,...){
     
@@ -313,6 +314,7 @@ coef.bspline = function(yy,xx,zz = NULL,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5,
     pp = NCOL(yy)
     dd = NCOL(vv)
     qq = NCOL(xx)
+    nn = NROW(yy)
     
     ss = vv%*%alpha
     
@@ -348,6 +350,7 @@ coef.bspline = function(yy,xx,zz = NULL,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5,
     pp = NCOL(yy)
     dd = NCOL(vv)
     qq = NCOL(xx)
+    nn = NROW(yy)
     
     ss = vv%*%alpha
     
@@ -389,7 +392,7 @@ coef.bspline = function(yy,xx,zz = NULL,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5,
   
   #initialized 
   if(is.null(alpha_inl)){
-    opt_inl = Rsolnp::gosolnp(fun = function(z){LnAlpha_inl(z,vv,yy,xx,K,mm)},LB = c(0,rep(-1,dd-1)),UB = rep(1,dd), n.sim = 20000,n.restarts = 5,control = list(trace = 0))
+    opt_inl = Rsolnp::gosolnp(fun = function(z){LnAlpha_inl(z,vv,yy,xx,K,mm)},LB = c(0,rep(LB,dd-1)),UB = rep(UB,dd), n.sim = n.sim, n.restarts = n.restarts,control = list(trace = 0))
     alpha_inl = rescale(opt_inl$pars) 
     obj_inl =  tail(opt_inl$values,1) 
   }else{
@@ -458,10 +461,12 @@ coef.bspline = function(yy,xx,zz = NULL,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5,
         
         obj[iter] <-  tail(opt$values,1)
         
+        if(trace == 1){
         cat(paste0("########  ","K= ",K,"  ####  Obj:",sprintf("%0.3f",obj[iter]),"  ####  ","Alpha Diff:",sprintf("%0.4f",sum(abs(alpha - alpha_new))),"  ####  Iteration:", iter,"  ########"),"\n") 
+        }
+                
         
-        
-        if(iter > itermax){
+        if(iter > itermax-1){
           break
         }
       }
@@ -541,9 +546,11 @@ coef.bspline = function(yy,xx,zz = NULL,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5,
       
       obj[iter] <-  tail(opt$values,1)
       
-      cat(paste0("########  ","Obj:",sprintf("%0.3f",obj[iter]),"  ####  ","Alpha Diff:",sprintf("%0.4f",sum(abs(alpha - alpha_new))),"  ####  Iteration:", iter,"  ########"),"\n") 
-      
-      if(iter > itermax){
+      if(trace == 1){
+        cat(paste0("########  ","Obj:",sprintf("%0.3f",obj[iter]),"  ####  ","Alpha Diff:",sprintf("%0.4f",sum(abs(alpha - alpha_new))),"  ####  Iteration:", iter,"  ########"),"\n") 
+      }
+            
+      if(iter > itermax-1){
         break
       }
       
