@@ -547,11 +547,11 @@ TVSNP.test = function(z,result_tv,result_con,type = "leverage"){
   return(list(LR_f = LR_f,LLTV = LLTV,LLC = LLC))
 }
 
-TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 'sged',
-                   tgc.type  = "leverage",tgc.targeting = F, mean.model = list(armaOrder = c(1,1)),
-                   CTGC = FALSE,rep_sim = 10,n.sim = 1000){
+SNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 'sged',
+                   snp.type  = "leverage",snp.targeting = F, mean.model = list(armaOrder = c(1,1)),
+                   CSNP = FALSE,rep_sim = 10,n.sim = 1000){
   
-  type  = tgc.type
+  type  = snp.type
   
   spec = rugarch::ugarchspec(mean.model = mean.model,variance.model = list(model = var.model, garchOrder = c(1, 1),variance.targeting = var.targeting), distribution = var.distribution)
   
@@ -567,7 +567,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
   
   coef_mv = fit_variance@fit$coef
   
-  if(CTGC == T){
+  if(CSNP == T){
     #$constant theta estimation$
 
       theta_con_inl = runif(2,-1,1)
@@ -601,7 +601,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
     return(result_con)
   }
   
-  if(CTGC == F){
+  if(CSNP == F){
     
     theta_con_inl = runif(2,-1,1)
     
@@ -634,9 +634,9 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
     )
     
     #$time varying theta estimation$
-    if(!tgc.targeting){
+    if(!snp.targeting){
       
-      if(tgc.type == "linear"){
+      if(snp.type == "linear"){
         ar1_inl = runif(1,0.5,0.9)
         ar2_inl = runif(1,0.5,0.9)
         theta_tv_inl = c(0,ar1_inl,0,0,0,ar2_inl,0,0)
@@ -659,7 +659,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
         theta_tv_est = con_tv$pars[c(1,2,3,3,4,5,6,6,7,8)]
       }
       
-      if(tgc.type == "leverage"){
+      if(snp.type == "leverage"){
         
         ar1_inl = runif(1,0.5,0.9)
         ar2_inl = runif(1,0.5,0.9)
@@ -683,7 +683,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
         theta_tv_est = con_tv$pars
       }
       
-      if(tgc.type == "n-leverage"){
+      if(snp.type == "n-leverage"){
         ar1_inl = runif(1,0.5,0.8)
         ar2_inl = runif(1,0.5,0.8)
         theta_tv_inl = c(0,ar1_inl,0,0,0,0,ar2_inl,0,0,0)
@@ -709,8 +709,8 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
     }
     
     # targeting estimation
-    if(tgc.targeting){
-      if(tgc.type == "linear"){
+    if(snp.targeting){
+      if(snp.type == "linear"){
         ar1_inl = runif(1,0.5,0.8)
         ar2_inl = runif(1,0.5,0.8)
         
@@ -738,7 +738,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
         
       }
       
-      if(tgc.type == "leverage"){
+      if(snp.type == "leverage"){
         ar1_inl = runif(1,0.5,0.8)
         ar2_inl = runif(1,0.5,0.8)
         theta_tv_inl = c(theta_tv_inl_con[1],ar1_inl,0,0,0,theta_tv_inl_con[6],ar2_inl,0,0,0)
@@ -765,7 +765,7 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
         
       }
       
-      if(tgc.type == "n-leverage"){
+      if(snp.type == "n-leverage"){
         ar1_inl = runif(1,0.5,0.8)
         ar2_inl = runif(1,0.5,0.8)
         theta_tv_inl = c(0,ar1_inl,0,0,0,0,ar2_inl,0,0,0)
@@ -824,9 +824,9 @@ TGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
   
 }
 
-MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 'sged', VAR = T,Corr.Struture = c("ica","dcc","copula"), dcc.model = "DCC", 
+MFSNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 'sged', VAR = T,Corr.Struture = c("ica","dcc","copula"), dcc.model = "DCC", 
                      copula.model = list(copula = "mvt", method = "ML", time.varying = T, transformation = "spd"),
-                     tgc.type  = "leverage",tgc.targeting = F,mean.model = list(armaOrder = c(0, 0)),CTGC = FALSE,rep_sim = 10,n.sim = 1000){
+                     snp.type  = "leverage",snp.targeting = F,mean.model = list(armaOrder = c(0, 0)),CSNP = FALSE,rep_sim = 10,n.sim = 1000){
   
   result_factors_ica = NULL
   result_factors_dcc = NULL
@@ -878,8 +878,8 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     con_factor <- list()
     
     for (gg in 1:q) {
-      lf_snp = TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,
-                       CTGC = CTGC,tgc.targeting = tgc.targeting,rep_sim = rep_sim,n.sim = n.sim)
+      lf_snp = SNP_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),snp.type = snp.type,
+                       CSNP = CSNP,snp.targeting = snp.targeting,rep_sim = rep_sim,n.sim = n.sim)
       lf_snp$Lnf_tv
       lf_snp$result_con$Lnf_con
       
@@ -942,8 +942,8 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     con_factor <- list()
     
     for (gg in 1:NCOL(ff)) {
-      lf_snp = TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,
-                       tgc.targeting = tgc.targeting,CTGC = CTGC,rep_sim = rep_sim,n.sim = n.sim)
+      lf_snp = SNP_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),snp.type = snp.type,
+                       snp.targeting = snp.targeting,CSNP = CSNP,rep_sim = rep_sim,n.sim = n.sim)
       
       con_factor[[gg]] <- lf_snp
       
@@ -1012,8 +1012,8 @@ MFTGC_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     con_factor <- list()
     
     for (gg in 1:NCOL(ff)) {
-      lf_snp = TGC_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),tgc.type = tgc.type,
-                       CTGC = CTGC,tgc.targeting = tgc.targeting,rep_sim = rep_sim,n.sim = n.sim)
+      lf_snp = SNP_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),snp.type = snp.type,
+                       CSNP = CSNP,snp.targeting = snp.targeting,rep_sim = rep_sim,n.sim = n.sim)
       
       con_factor[[gg]] <- lf_snp
       

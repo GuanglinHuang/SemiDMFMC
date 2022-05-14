@@ -4,12 +4,12 @@
 #' @param ff The factors drive the data X.
 #' @param Z The variable drive factor loadings.
 #' @param SemiFL Logical. If \code{TRUE}, the factor loadings will be semi-parametric function.
-#' @param sel.bw Bandwith selection method.
-#' @param con_residual Logical, whether the moments of the residuals are time-varying or not.
+#' @param ECSNP Logical, whether the moments of the residuals are time-varying or not.
 #' @param best_model A vector. It gives which factor loadings are semi-parametric.
 #' @param Penalty Only used for multi-factor model. Penalty regression to estimate factor loadings.
-#' @param factor.control The parameters of factors' moments estimation.
-#' @param eps.control The parameters of errors' moments estimation.
+#' @param factorloading.control The control parameters of factor loadings estimation.
+#' @param factor.control The control parameters of factors' moments estimation.
+#' @param error.control The control parameters of errors' moments estimation.
 #' @param ... Any other passthru parameters.
 #' @return Estimated covariance, co-skewness, co-exkurtosis, co-kurtosis and the results of regression.
 #' 
@@ -26,7 +26,7 @@
 
 
 SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,FL.type = c("VCM","SIVCM"),
-                     con_residual = T,best_model = NULL,
+                     ECSNP = T,best_model = NULL,
                      Penalty = c("NONE","LASSO","MCP","SCAD"),
                      factorloading.control = list(alpha.type = 1, mm = 1, K = 15,
                                        Kmin = 10, Kmax = 20, np.eps = 10^-4, n.sim = 100, n.restarts = 5, 
@@ -34,10 +34,10 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,FL.type = c("VCM","SIVCM"),
                      factor.control = list(var.model = "sGARCH", var.targeting = F, var.distribution = "sged", 
                                            Corr.Struture = c("ica", "dcc", "copula"), dcc.model = "DCC", 
                                            copula.model = list(copula = "mvt", method = "ML", time.varying = TRUE, 
-                                                               transformation = "spd"), tgc.type = "leverage", tgc.targeting = F, 
-                                           mean.model = list(armaOrder = c(1, 1)), CTGC = FALSE, rep_sim_f = 10, n.sim_f = 5000),
-                     error.control    = list(var.model = "sGARCH", var.targeting = F, var.distribution = "sged",tgc.type = "leverage", 
-                                           tgc.targeting = F, mean.model = list(armaOrder = c(0,0)), rep_sim_e = 5, n.sim_e = 1000),...){
+                                                               transformation = "spd"), snp.type = "leverage", snp.targeting = F, 
+                                           mean.model = list(armaOrder = c(1, 1)), CSNP = FALSE, rep_sim_f = 10, n.sim_f = 5000),
+                     error.control    = list(var.model = "sGARCH", var.targeting = F, var.distribution = "sged",snp.type = "leverage", 
+                                           snp.targeting = F, mean.model = list(armaOrder = c(0,0)), rep_sim_e = 5, n.sim_e = 1000),...){
   n  = NCOL(X)
   t  = NROW(X)
   
@@ -309,16 +309,16 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,FL.type = c("VCM","SIVCM"),
     Corr.Struture    =  factor.control$Corr.Struture
     dcc.model        =  factor.control$dcc.model
     copula.model     =  factor.control$copula.model
-    tgc.type         =  factor.control$tgc.type
-    tgc.targeting    =  factor.control$tgc.targeting
+    snp.type         =  factor.control$snp.type
+    snp.targeting    =  factor.control$snp.targeting
     mean.model       =  list(armaOrder = c(0, 0))
-    CTGC             =  factor.control$CTGC
+    CSNP             =  factor.control$CSNP
     rep_sim_f        =  factor.control$rep_sim_f
     n.sim_f          =  factor.control$n.sim_f
       
-    result_factors   =  MFTGC_est(ff,var.model=var.model,var.targeting=var.targeting,var.distribution=var.distribution,
-                                     Corr.Struture=Corr.Struture,dcc.model=dcc.model,copula.model=copula.model,tgc.type=tgc.type,
-                                     tgc.targeting=tgc.targeting,mean.model=mean.model,CTGC=CTGC,rep_sim=rep_sim_f,n.sim = n.sim_f)
+    result_factors   =  MFSNP_est(ff,var.model=var.model,var.targeting=var.targeting,var.distribution=var.distribution,
+                                     Corr.Struture=Corr.Struture,dcc.model=dcc.model,copula.model=copula.model,snp.type=snp.type,
+                                     snp.targeting=snp.targeting,mean.model=mean.model,CSNP=CSNP,rep_sim=rep_sim_f,n.sim = n.sim_f)
 
     factor_moments = result_factors[[4]]
     
@@ -328,8 +328,8 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,FL.type = c("VCM","SIVCM"),
     var.model        =  factor.control$var.model
     var.targeting    =  factor.control$var.targeting
     var.distribution =  factor.control$var.distribution
-    tgc.type         =  factor.control$tgc.type
-    tgc.targeting    =  factor.control$tgc.targeting
+    snp.type         =  factor.control$snp.type
+    snp.targeting    =  factor.control$snp.targeting
     mean.model       =  factor.control$mean.model
     rep_sim_f        =  factor.control$rep_sim_f
     n.sim_f          =  factor.control$n.sim_f
@@ -338,10 +338,10 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,FL.type = c("VCM","SIVCM"),
         "       ######################################################################################","\n",
         "\n")
     
-    est_tgc = TGC_est(ff,var.model = var.model,var.targeting = var.targeting, 
-                      var.distribution = var.distribution, tgc.type = tgc.type, 
-                      tgc.targeting = tgc.targeting, mean.model = mean.model,
-                      CTGC = T,rep_sim = rep_sim_f,n.sim = n.sim_f)
+    est_tgc = SNP_est(ff,var.model = var.model,var.targeting = var.targeting, 
+                      var.distribution = var.distribution, snp.type = snp.type, 
+                      snp.targeting = snp.targeting, mean.model = mean.model,
+                      CSNP = T,rep_sim = rep_sim_f,n.sim = n.sim_f)
     
     mu_f_fore = est_tgc$result_moment$mm.fore[1]
     var_f_fore = est_tgc$result_moment$mm.fore[2]
@@ -359,7 +359,7 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,FL.type = c("VCM","SIVCM"),
   result_residuals_semi = NULL
   result_residuals_lm = NULL
   
-  if(con_residual == T){
+  if(ECSNP == T){
     
     cat("        ######################################################################################","\n",
         "       ##########  Estimating the [Constant] structure of [Idiosyncratic Errors]   ##########","\n",
@@ -369,8 +369,8 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,FL.type = c("VCM","SIVCM"),
     var.model        =  error.control$var.model
     var.targeting    =  error.control$var.targeting
     var.distribution =  error.control$var.distribution
-    tgc.type         =  error.control$tgc.type
-    tgc.targeting    =  error.control$tgc.targeting
+    snp.type         =  error.control$snp.type
+    snp.targeting    =  error.control$snp.targeting
     mean.model       =  error.control$mean.model
     rep_sim_e        =  error.control$rep_sim_e
     n.sim_e          =  error.control$n.sim_e
@@ -385,9 +385,9 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,FL.type = c("VCM","SIVCM"),
       
       e_ik = e_i_lm[,kk]
       
-      est_ei_snp = TGC_est(e_ik,var.model = var.model, var.targeting = var.targeting, 
-                                      var.distribution = var.distribution, tgc.type = tgc.type, 
-                                      tgc.targeting = tgc.targeting, mean.model = mean.model, CTGC = T, rep_sim = rep_sim_e,n.sim = n.sim_e)
+      est_ei_snp = SNP_est(e_ik,var.model = var.model, var.targeting = var.targeting, 
+                                      var.distribution = var.distribution, snp.type = snp.type, 
+                                      snp.targeting = snp.targeting, mean.model = mean.model, CSNP = T, rep_sim = rep_sim_e,n.sim = n.sim_e)
       
       con_residuals[[kk]] <- est_ei_snp
       
@@ -423,9 +423,9 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,FL.type = c("VCM","SIVCM"),
           e_ik = e_i_np[-1,kk]
         }
 
-        est_ei_snp = TGC_est(e_ik,var.model = var.model, var.targeting = var.targeting, 
-                             var.distribution = var.distribution, tgc.type = tgc.type, 
-                             tgc.targeting = tgc.targeting, mean.model = mean.model, CTGC = T, rep_sim = rep_sim_e,n.sim = n.sim_e)
+        est_ei_snp = SNP_est(e_ik,var.model = var.model, var.targeting = var.targeting, 
+                             var.distribution = var.distribution, snp.type = snp.type, 
+                             snp.targeting = snp.targeting, mean.model = mean.model, CSNP = T, rep_sim = rep_sim_e,n.sim = n.sim_e)
         
         con_residuals_semi[[kk]] <- est_ei_snp
         
@@ -449,8 +449,8 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,FL.type = c("VCM","SIVCM"),
     var.model        =  error.control$var.model
     var.targeting    =  error.control$var.targeting
     var.distribution =  error.control$var.distribution
-    tgc.type         =  error.control$tgc.type
-    tgc.targeting    =  error.control$tgc.targeting
+    snp.type         =  error.control$snp.type
+    snp.targeting    =  error.control$snp.targeting
     mean.model       =  error.control$mean.model
     rep_sim_e        =  error.control$rep_sim_e
     n.sim_e          =  error.control$n.sim_e
@@ -465,9 +465,9 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,FL.type = c("VCM","SIVCM"),
       
       e_ik = e_i_lm[,kk]
       
-      est_ei_snp = TGC_est(e_ik,var.model = var.model, var.targeting = var.targeting, 
-                           var.distribution = var.distribution, tgc.type = tgc.type, 
-                           tgc.targeting = tgc.targeting, mean.model = mean.model, CTGC = FALSE, rep_sim = rep_sim_e,n.sim = n.sim_e)
+      est_ei_snp = SNP_est(e_ik,var.model = var.model, var.targeting = var.targeting, 
+                           var.distribution = var.distribution, snp.type = snp.type, 
+                           snp.targeting = snp.targeting, mean.model = mean.model, CSNP = FALSE, rep_sim = rep_sim_e,n.sim = n.sim_e)
       
       con_residuals_tv[[kk]] <- est_ei_snp
       
@@ -495,8 +495,8 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,FL.type = c("VCM","SIVCM"),
       var.model        =  error.control$var.model
       var.targeting    =  error.control$var.targeting
       var.distribution =  error.control$var.distribution
-      tgc.type         =  error.control$tgc.type
-      tgc.targeting    =  error.control$tgc.targeting
+      snp.type         =  error.control$snp.type
+      snp.targeting    =  error.control$snp.targeting
       mean.model       =  error.control$mean.model
       rep_sim_e        =  error.control$rep_sim_e
       n.sim_e          =  error.control$n.sim_e
@@ -516,9 +516,9 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,FL.type = c("VCM","SIVCM"),
         }
         
         
-        est_ei_snp = TGC_est(e_ik,var.model = var.model, var.targeting = var.targeting, 
-                             var.distribution = var.distribution, tgc.type = tgc.type, 
-                             tgc.targeting = tgc.targeting, mean.model = mean.model, CTGC = FALSE, rep_sim = rep_sim_e,n.sim = n.sim_e)
+        est_ei_snp = SNP_est(e_ik,var.model = var.model, var.targeting = var.targeting, 
+                             var.distribution = var.distribution, snp.type = snp.type, 
+                             snp.targeting = snp.targeting, mean.model = mean.model, CSNP = FALSE, rep_sim = rep_sim_e,n.sim = n.sim_e)
         
         con_residuals_tv_semi[[kk]] <- est_ei_snp
         
@@ -544,7 +544,7 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,FL.type = c("VCM","SIVCM"),
   result_semi_tv = NULL
   
 
-  if(con_residual == T){
+  if(ECSNP == T){
     
     result_lm_con = list(beta = beta_i_lm, mm_factor = factor_moments, mm_eps = residual_moments)
     
