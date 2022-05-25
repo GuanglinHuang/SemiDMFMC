@@ -1,6 +1,12 @@
 #' @useDynLib SmeiDMFMC
 #' @importFrom Rcpp sourceCpp
 
+M3M <- function (X) 
+{
+  M3M = t(X) %*% ((X %*% t(X)) * (X %*% t(X))) %*% X
+  return(M3M)
+}
+
 
 CUM <- function(X,...){
   if(ncol(X) == 0){
@@ -89,9 +95,9 @@ calmoments = function(skew, shape, dist = "sstd"){
 Obj.MVaR = function(mmP,alpha = 0.05,...) ###enter moments of portfolio!!
 {
   
-  m2P = mmP[1];
-  m3P = mmP[2];
-  m4P = mmP[3];
+  m2P = mmP[1]/100^2;
+  m3P = mmP[2]/100^3;
+  m4P = mmP[3]/100^4;
   
   zalpha = qnorm(alpha);
   #M2
@@ -109,9 +115,9 @@ Obj.MVaR = function(mmP,alpha = 0.05,...) ###enter moments of portfolio!!
 
 Obj.EU = function(mmP,gamma = 10,...){
   
-  m2P = mmP[1];
-  m3P = mmP[2];
-  m4P = mmP[3];
+  m2P = mmP[1]/100^2;
+  m3P = mmP[2]/100^3;
+  m4P = mmP[3]/100^4;
   
   #EU
   Obj =  gamma/2*m2P - gamma*(gamma+1)/6*m3P + gamma*(gamma+1)*(gamma+2)/24*m4P
@@ -347,3 +353,83 @@ DNLShrink=function (X, k = 1, ...)
                 Hf_tilde = Hf_tilde)
   return(result)
 }
+
+
+BLP.moments = function(X,ff = NULL,k = NULL,type = "PCA",...){
+  
+  n = NCOL(X)
+  t = NROW(X)
+  
+  if(is.null(ff)){
+    mu = colMeans(X)
+    X  = scale(X,scale = F)
+   
+    if(type == "PCA"){
+      m2x = cov(X)
+      ev2 = eigen(m2x)
+      
+      BB = ev2$vectors[,1:k]*sqrt(n)
+      FF = X%*%BB/n
+
+      EE = X - FF%*%t(BB)}
+    
+    if(type == "HFA"){
+     
+      m3x = M3M(X)/NROW(X)^2
+
+      ev3 = eigen(m3x)
+      
+      BB = ev2$vectors[,1:k]*sqrt(n)
+      
+      FF = X%*%BB/n
+      
+      EE = X - FF%*%t(BB)
+      }
+
+    }else{
+      
+    mu = colMeans(X)
+    reg = lm(as.matrix(X)~as.matrix(FF))
+    
+    BB = reg$coefficients[-1,]
+    EE = reg$residuals
+      
+    }
+    
+    
+    m2f_lm = cov(FF)
+    m3f_lm = PerformanceAnalytics::M3.MM(FF)
+    m4f_lm = CUM(FF)
+    
+    m2e_lm = Vm(EE,2)
+    m3e_lm = Vm(EE,3)
+    m4e_lm = Vm(EE,4) - 3*m2e_lm^2
+    
+    factor_moments = list(m2f_lm,m3f_lm,m4f_lm)
+    residual_moments = list(m2e_lm,m3e_lm,m4e_lm)
+    
+    
+    con = list(Beta = BB,factor_moments = factor_moments, residual_moments = residual_moments)
+    
+    return(con)
+  }
+  
+  
+  
+  
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
