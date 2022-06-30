@@ -415,3 +415,78 @@ solve_hess = function(hess){
 }
 
 
+ICA.GARCHSK = function(yy){
+  yy = as.matrix(yy)
+  n = NCOL(yy)
+  t = NROW(yy)
+  ica_data = matrix(NA,t,n)
+  ica_mean = vector()
+  for (bb in 1:n) {
+    ica_arma = arima(yy[,bb],order = c(1,0,1))
+    ica_data[,bb] <- ica_arma$residuals
+    ica_mean[bb] <- predict(ica_arma)$pred
+  }
+  
+  
+  jade = ica::icajade(ica_data,nc = n)
+  jade_f = jade$S
+  jade_B = solve(jade$W)
+  
+  arcdfit = list()
+  arcdfore = list()
+  
+  f_var_arcd = vector()
+  f_skew_arcd = vector()
+  f_kurt_arcd = vector()
+  
+  e_skewpar = e_shapepar = vector()
+  for (kk in 1:n){
+    e_ik = jade_f[,kk]
+    
+    spec = rugarch::ugarchspec(mean.model = list(armaOrder = c(0, 0)),variance.model = list(model = 'sGARCH', garchOrder = c(1, 1),variance.targeting = F), distribution = 'sged')
+    
+    e_fit_variance = rugarch::ugarchfit(spec, e_ik, solver = 'hybrid')
+    
+    e_z = e_fit_variance@fit$z  #residuals is ht*et, z is et,fitted.value is conditional mean
+    
+    e_skewpar[kk] = e_fit_variance@fit$coef[4]
+    e_shapepar[kk] = e_fit_variance@fit$coef[5]
+    
+    e_hz = e_fit_variance@fit$residuals
+    
+    var_e_fit = e_fit_variance@fit$var
+    var_e_s = e_hz^2 
+    mu_e_fit = e_fit_variance@fit$fitted.values
+    
+    e_coef_mv = e_fit_variance@fit$coef
+    
+    e_theta_tv_inl = c(rep(0,5),rep(0,5))
+    e_con_tv = optim(par = e_theta_tv_inl,function(theta_tv){con = likelihood_gc_tv_rcpp(e_z,theta_tv,e_theta_est,type = "leverage");return(-con[[1]])}, method = "BFGS", hessian = T)
+    
+    e_theta_tv_est = e_con_tv$par
+    #$residual moment forecasting$
+    e_mm_fit = gc_fit_moment(e_z,e_theta_tv_est)
+    e_skew_fit = e_mm_fit[,3]
+    e_kurt_fit = e_mm_fit[,4]
+    
+    e_mm_fore = gc_predict(e_fit_variance,e_z,e_theta_tv_est,type = "leverage")
+    
+    mu_e_fore = e_mm_fore[1]
+    var_e_fore = e_mm_fore[2]
+    skew_e_fore = e_mm_fore[3]
+    kurt_e_fore = e_mm_fore[4]    
+    
+    f_var_arcd[kk] <-  var_e_fore
+    f_skew_arcd[kk] <-  skew_e_fore
+    f_kurt_arcd[kk] <-  kurt_e_fore
+    
+  }
+  
+  mm_factor_garchsk = list(f_var_arcd,f_skew_arcd,f_kurt_arcd)
+  
+  return(list(mm_factor_garchsk = mm_factor_garchsk,Beta = jade_B,mu = ica_mean))
+  
+  
+}
+
+
