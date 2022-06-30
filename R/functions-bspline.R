@@ -420,7 +420,7 @@ coef.bspline = function(yy,xx,zz = NULL,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5,
       obj_t = obj_inl+1
       obj_t1 = obj_inl
       
-      while( sum(abs(alpha - alpha_new)) > eps && obj_t1 <  obj_t  ){  
+      while( sum(abs(alpha - alpha_new)) > eps   ){  ##&& obj_t1 <  obj_t
         obj_t = obj_t1
         alpha = alpha_new
         
@@ -503,7 +503,7 @@ coef.bspline = function(yy,xx,zz = NULL,alpha_inl = NULL,mm = 1,K = 10,Kmin = 5,
     obj_t = obj_inl+1
     obj_t1 = obj_inl
     
-    while( sum(abs(alpha - alpha_new)) > eps & obj_t1 <  obj_t ){ #
+    while( sum(abs(alpha - alpha_new)) > eps  ){ #&& obj_t1 <  obj_t
       
       obj_t = obj_t1
       alpha = alpha_new
