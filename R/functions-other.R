@@ -231,6 +231,18 @@ Portfolio.Cumulants.Mat = function (w, mm_factor, mm_eps, A){
     return(mmP)
   }
 
+Portfolio.Cumulants.GARCHSK = function (w, mm_factor, A){
+  m2f = mm_factor[[1]]
+  m3f = mm_factor[[2]]
+  m4f = mm_factor[[3]]
+  B = t(w) %*% A
+  m2P = sum((B^2) * m2f)
+  m3P = sum((B^3) * m3f)
+  m4P = sum((B^4) * m4f)
+  mmP = c(m2P, m3P, m4P)
+  return(mmP)
+}
+
 Portfolio_Weight = function(MM,opt.type = c("VAR","Uc","MV"),gamma = 10, 
                             alpha = 0.05, shortselling = T,lb = -1,ub = 2,MU = F){
   M1 = MM[[1]];M2 = MM[[2]];M3 = MM[[3]];C4 = MM[[4]];M4 = MM[[5]];
