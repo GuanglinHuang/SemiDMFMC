@@ -333,6 +333,8 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,FL.type = c("VCM","SIVCM"),
     mean.model       =  factor.control$mean.model
     rep_sim_f        =  factor.control$rep_sim_f
     n.sim_f          =  factor.control$n.sim_f
+    CSNP             =  factor.control$CSNP
+    
     cat("        ######################################################################################","\n",
         "       ##########    Estimating the [Time-Varying] structure of [Single-Factors]   ##########","\n",
         "       ######################################################################################","\n",
@@ -341,7 +343,7 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,FL.type = c("VCM","SIVCM"),
     est_tgc = SNP_est(ff,var.model = var.model,var.targeting = var.targeting, 
                       var.distribution = var.distribution, snp.type = snp.type, 
                       snp.targeting = snp.targeting, mean.model = mean.model,
-                      CSNP = T,rep_sim = rep_sim_f,n.sim = n.sim_f)
+                      CSNP = CSNP,rep_sim = rep_sim_f,n.sim = n.sim_f)
     
     mu_f_fore = est_tgc$result_moment$mm.fore[1]
     var_f_fore = est_tgc$result_moment$mm.fore[2]
