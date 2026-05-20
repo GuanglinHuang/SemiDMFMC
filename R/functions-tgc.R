@@ -825,6 +825,7 @@ SNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
   
 }
 
+ 
 MFSNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 'sged', VAR = T,Corr.Struture = c("ica","dcc","copula"), dcc.model = "DCC", 
                      copula.model = list(copula = "mvt", method = "ML", time.varying = T, transformation = "spd"),
                      snp.type  = "leverage",snp.targeting = F,mean.model = list(armaOrder = c(0, 0)),CSNP = FALSE,rep_sim = 10,n.sim = 1000){
@@ -839,6 +840,29 @@ MFSNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
   
   q = NCOL(ff)
   ff = as.matrix(ff)
+  
+  # Helper: make SNP_est output compatible when CSNP = TRUE or FALSE
+  get_snp_lnf <- function(lf_snp) {
+    if (!is.null(lf_snp$result_con)) {
+      lnf_tv <- lf_snp$Lnf_tv
+      lnf_con <- lf_snp$result_con$Lnf_con
+    } else {
+      lnf_tv <- lf_snp$Lnf_con
+      lnf_con <- lf_snp$Lnf_con
+    }
+    
+    if (is.null(lnf_tv) || length(lnf_tv) == 0L) {
+      lnf_tv <- lnf_con
+    }
+    if (is.null(lnf_con) || length(lnf_con) == 0L) {
+      lnf_con <- lnf_tv
+    }
+    
+    list(
+      Lnf_tv = as.numeric(lnf_tv),
+      Lnf_con = as.numeric(lnf_con)
+    )
+  }
   
   if("ica" %in% Corr.Struture){
     
@@ -859,13 +883,13 @@ MFSNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
                                                            variance.targeting = var.targeting), distribution.model = "manig", 
                                      ica = "fastica", ica.fix = list(A = NULL, K = NULL))  
     }
-
+    
     fit_gogarch = rmgarch::gogarchfit(gogarch,ff,out.sample = 0, solver = "solnp", gfun = "tanh")
     
     fore_gogarch = rmgarch::gogarchforecast(fit_gogarch,n.ahead = 1)
-
+    
     ica_B = fit_gogarch@mfit$A
-
+    
     lf = fit_gogarch@mfit$residuals%*%t(solve(ica_B))
     
     #independent component moment estimation
@@ -881,8 +905,8 @@ MFSNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     for (gg in 1:q) {
       lf_snp = SNP_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),snp.type = snp.type,
                        CSNP = CSNP,snp.targeting = snp.targeting,rep_sim = rep_sim,n.sim = n.sim)
-      lf_snp$Lnf_tv
-      lf_snp$result_con$Lnf_con
+      
+      lnf_tmp <- get_snp_lnf(lf_snp)
       
       con_factor[[gg]] <- lf_snp
       
@@ -891,8 +915,8 @@ MFSNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
       skew_factor_fore = lf_snp$result_moment$mm.fore[3]
       kurt_factor_fore = lf_snp$result_moment$mm.fore[4]
       
-      lnf_lf[gg] = lf_snp$Lnf_tv
-      lnf_lf_con[gg] = lf_snp$result_con$Lnf_con
+      lnf_lf[gg] = lnf_tmp$Lnf_tv
+      lnf_lf_con[gg] = lnf_tmp$Lnf_con
       
       var_mf_fore[gg,gg] = var_factor_fore
       skew_mf_fore[gg,gg+(gg-1)*q] = skew_factor_fore
@@ -909,7 +933,7 @@ MFSNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
   }
   
   if("dcc" %in% Corr.Struture){
-  
+    
     uspec = rugarch::ugarchspec(mean.model = mean.model,
                                 variance.model = list(model = var.model, garchOrder = c(1, 1),
                                                       variance.targeting = var.targeting), distribution = var.distribution) #univariate spec
@@ -921,7 +945,6 @@ MFSNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     }else{
       dccgarch = rmgarch::dccspec(uspec = mspec, VAR = F, model = dcc.model,distribution = "mvt")
     }
-    
     
     fit_dccgarch = rmgarch::dccfit(dccgarch,ff)
     
@@ -946,6 +969,8 @@ MFSNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
       lf_snp = SNP_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),snp.type = snp.type,
                        snp.targeting = snp.targeting,CSNP = CSNP,rep_sim = rep_sim,n.sim = n.sim)
       
+      lnf_tmp <- get_snp_lnf(lf_snp)
+      
       con_factor[[gg]] <- lf_snp
       
       mu_factor_fore = lf_snp$result_moment$mm.fore[1]
@@ -953,14 +978,14 @@ MFSNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
       skew_factor_fore = lf_snp$result_moment$mm.fore[3]
       kurt_factor_fore = lf_snp$result_moment$mm.fore[4]
       
-      lnf_lf[gg] = lf_snp$Lnf_tv
-      lnf_lf_con[gg] = lf_snp$result_con$Lnf_con
+      lnf_lf[gg] = lnf_tmp$Lnf_tv
+      lnf_lf_con[gg] = lnf_tmp$Lnf_con
       
       var_mf_fore[gg,gg] = var_factor_fore/var_factor_fore
       skew_mf_fore[gg,gg+(gg-1)*q] = skew_factor_fore/(var_factor_fore)^1.5
       kurt_mf_fore[gg,gg+(gg-1)*q+(gg-1)*q^2] = kurt_factor_fore/(var_factor_fore)^2
     }
-
+    
     sig_f_fore = Mat.k(var_f_fore,1/2)
     
     var_f_fore = sig_f_fore%*%var_mf_fore%*%sig_f_fore
@@ -985,7 +1010,6 @@ MFSNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
       copulagarch = rmgarch::cgarchspec(uspec = mspec, VAR = F, distribution.model = copula.model)
     }
     
-    
     fit_copulagarch = rmgarch::cgarchfit(copulagarch,ff)
     
     # use simulation to forecast the Ht
@@ -1002,7 +1026,7 @@ MFSNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
     lf = fit_copulagarch@mfit$stdresid
     
     #independent component moment estimation
-  
+    
     var_mf_fore = matrix(0,q,q)
     skew_mf_fore = matrix(0,q,q^2)
     kurt_mf_fore = matrix(0,q,q^3)
@@ -1016,6 +1040,8 @@ MFSNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
       lf_snp = SNP_est(lf[,gg],mean.model = list(armaOrder = c(0, 0)),snp.type = snp.type,
                        CSNP = CSNP,snp.targeting = snp.targeting,rep_sim = rep_sim,n.sim = n.sim)
       
+      lnf_tmp <- get_snp_lnf(lf_snp)
+      
       con_factor[[gg]] <- lf_snp
       
       mu_factor_fore = lf_snp$result_moment$mm.fore[1]
@@ -1023,26 +1049,24 @@ MFSNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
       skew_factor_fore = lf_snp$result_moment$mm.fore[3]
       kurt_factor_fore = lf_snp$result_moment$mm.fore[4]
       
-      lnf_lf[gg] = lf_snp$Lnf_tv
-      lnf_lf_con[gg] = lf_snp$result_con$Lnf_con
+      lnf_lf[gg] = lnf_tmp$Lnf_tv
+      lnf_lf_con[gg] = lnf_tmp$Lnf_con
       
       var_mf_fore[gg,gg] = var_factor_fore/var_factor_fore
       skew_mf_fore[gg,gg+(gg-1)*q] = skew_factor_fore/(var_factor_fore)^1.5
       kurt_mf_fore[gg,gg+(gg-1)*q+(gg-1)*q^2] = kurt_factor_fore/(var_factor_fore)^2
     }
     
-    
     sig_f_fore = Mat.k(var_f_fore,1/2)
     
     var_f_fore = sig_f_fore%*%var_mf_fore%*%sig_f_fore
     skew_f_fore = sig_f_fore%*%skew_mf_fore%*%(sig_f_fore%x%sig_f_fore)
     kurt_f_fore = sig_f_fore%*%kurt_mf_fore%*%(sig_f_fore%x%sig_f_fore%x%sig_f_fore)
-  
+    
     result_factors_copula = list(result_mgarch = fit_copulagarch,fore_mgarch = list(mu = mu_f_fore), result_snp = con_factor,factor_moments = list(var_f_fore,skew_f_fore,kurt_f_fore))
     
     copula_moments = list(var_f_fore,skew_f_fore,kurt_f_fore)
   }
-  
   
   return(list(result_factors_ica      =   result_factors_ica,
               result_factors_dcc      =   result_factors_dcc,
@@ -1050,9 +1074,6 @@ MFSNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution 
               factor_moments          =   list(ica_moments    = ica_moments,
                                                dcc_moments    = dcc_moments,
                                                copula_moments = copula_moments)))
-  
 }
-  
-  
 
 
