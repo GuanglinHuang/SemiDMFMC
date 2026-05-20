@@ -311,7 +311,7 @@ SemiDMFMC = function(X,ff, Z = NULL, SemiFL = F,FL.type = c("VCM","SIVCM"),
     copula.model     =  factor.control$copula.model
     snp.type         =  factor.control$snp.type
     snp.targeting    =  factor.control$snp.targeting
-    mean.model       =  list(armaOrder = c(0, 0))
+    mean.model       =  factor.control$mean.model
     CSNP             =  factor.control$CSNP
     rep_sim_f        =  factor.control$rep_sim_f
     n.sim_f          =  factor.control$n.sim_f

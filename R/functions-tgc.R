@@ -711,8 +711,8 @@ SNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
     # targeting estimation
     if(snp.targeting){
       if(snp.type == "linear"){
-        ar1_inl = runif(1,0.5,0.8)
-        ar2_inl = runif(1,0.5,0.8)
+        ar1_inl = runif(1,0,0.5)
+        ar2_inl = runif(1,0,0.5)
         
         theta_tv_inl = c(theta_tv_inl_con[1],ar1_inl,0,0,theta_tv_inl_con[6],ar2_inl,0,0)
         
@@ -739,8 +739,8 @@ SNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
       }
       
       if(snp.type == "leverage"){
-        ar1_inl = runif(1,0.5,0.8)
-        ar2_inl = runif(1,0.5,0.8)
+        ar1_inl = runif(1,0,0.5)
+        ar2_inl = runif(1,0,0.5)
         theta_tv_inl = c(theta_tv_inl_con[1],ar1_inl,0,0,0,theta_tv_inl_con[6],ar2_inl,0,0,0)
         
         LB = c(-0.5,-1,-1,-1,-0.3,-0.5,-1,-1,-1,-0.3)
@@ -766,9 +766,10 @@ SNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
       }
       
       if(snp.type == "n-leverage"){
-        ar1_inl = runif(1,0.5,0.8)
-        ar2_inl = runif(1,0.5,0.8)
-        theta_tv_inl = c(0,ar1_inl,0,0,0,0,ar2_inl,0,0,0)
+        ar1_inl = runif(1,0,0.5)
+        ar2_inl = runif(1,0,0.5)
+     
+        theta_tv_inl = c(theta_tv_inl_con[1],ar1_inl,0,0,0,theta_tv_inl_con[6],ar2_inl,0,0,0)
         
         LB = c(-0.5,-1,-1,-1,-0.3,-0.5,-1,-1,-1,-0.3)
         UB = c(0.5,1,1,1,0.3,0.5,1,1,1,0.3)
@@ -792,8 +793,7 @@ SNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
         
       }    
 }
-    
-    
+ 
     result_tv = list(
       tgc.cof = theta_tv_est, tv_con = tv_con
       )
