@@ -711,13 +711,13 @@ SNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
     # targeting estimation
     if(snp.targeting){
       if(snp.type == "linear"){
-        ar1_inl = runif(1,0,0.5)
-        ar2_inl = runif(1,0,0.5)
+        ar1_inl = 0 #runif(1,0,0.5)
+        ar2_inl = 0 #runif(1,0,0.5)
         
         theta_tv_inl = c(theta_tv_inl_con[1],ar1_inl,0,0,theta_tv_inl_con[6],ar2_inl,0,0)
         
-        LB = c(-0.5,-1,-1,-1,-0.3,-0.5,-1,-1,-1,-0.3)
-        UB = c(0.5,1,1,1,0.3,0.5,1,1,1,0.3)
+        LB = c(-1,-1,-1,-1,-0.3,-1,-1,-1,-1,-0.3)
+        UB = c(1,1,1,1,0.3,1,1,1,1,0.3)
         
         con_tv = Rsolnp::gosolnp(pars = theta_tv_inl,fixed = c(1,4,5,8),function(sss){
           theta_tv = sss[c(2,3,3,4,6,7,7,8)];
@@ -739,12 +739,13 @@ SNP_est = function(ff,var.model = 'sGARCH',var.targeting = F,var.distribution = 
       }
       
       if(snp.type == "leverage"){
-        ar1_inl = runif(1,0,0.5)
-        ar2_inl = runif(1,0,0.5)
+        ar1_inl = 0 #runif(1,0,0.5)
+        ar2_inl = 0 #runif(1,0,0.5)
+        
         theta_tv_inl = c(theta_tv_inl_con[1],ar1_inl,0,0,0,theta_tv_inl_con[6],ar2_inl,0,0,0)
         
-        LB = c(-0.5,-1,-1,-1,-0.3,-0.5,-1,-1,-1,-0.3)
-        UB = c(0.5,1,1,1,0.3,0.5,1,1,1,0.3)
+        LB = c(-1,-1,-1,-1,-0.3,-1,-1,-1,-1,-0.3)
+        UB = c(1,1,1,1,0.3,1,1,1,1,0.3)
         
         con_tv = Rsolnp::gosolnp(pars = theta_tv_inl,fixed = c(1,5,6,10),function(sss){
           theta_tv = sss[-c(1,6)];
